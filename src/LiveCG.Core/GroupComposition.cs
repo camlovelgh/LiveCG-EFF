@@ -32,14 +32,39 @@ public sealed partial class EffectScene
         });
         if(plain){DrawOriginal(canvas,0,0,null);return;}
         canvas.SaveLayer();canvas.ClipRect(SKRect.Create(Width,Height));DrawOriginal(canvas,0,0,null);
+        bool NeedsRaster(EffectRegion region)
+        {
+            var layer = GetLayer(region);
+            var clips = ClipTiming.EffectiveClips(region.Clips, time);
+            return region.Masks.Any(mask => mask.Enabled) ||
+                effects && (!Identity(Evaluate(clips, time, layer.Bounds, layer.Digits.Count > 0)) ||
+                    NumericAt(clips, layer, time) ||
+                    region.Role == RegionRole.Group && regions.Any(child => child.ParentId == region.Id && child.Enabled &&
+                        (NeedsRaster(child) || ClipTiming.EffectiveClips(child.Clips, time)
+                            .Any(clip => time >= clip.Start && (time < clip.End || ProductInfo.HoldsDecoration(clip.Options.Kind))))));
+        }
+        var rasterRoots = roots.Where(root => !root.Enabled || NeedsRaster(root)).Select(root => root.Id).ToHashSet();
         foreach(var root in roots)
         {
-            if(root.OverlayOnly||root.Enabled&&root.Background==BackgroundMode.KeepOriginal)continue;
-            var layer=GetLayer(root);using var p=new SKPaint{BlendMode=SKBlendMode.DstOut};canvas.DrawImage(layer.EraseImage!,layer.Bounds.Left,layer.Bounds.Top,p);canvas.DrawImage(layer.FillImage!,layer.Bounds.Left,layer.Bounds.Top);
+            if(!rasterRoots.Contains(root.Id)||root.OverlayOnly||root.Enabled&&root.Background==BackgroundMode.KeepOriginal)continue;
+            var layer=GetLayer(root);DrawReplacement(canvas,layer,layer.Bounds.Left,layer.Bounds.Top,effects&&root.Enabled&&NumericAt(ClipTiming.EffectiveClips(root.Clips,time),layer,time));
         }
         foreach(var root in roots.AsEnumerable().Reverse())
         {
-            if(!root.Enabled)continue;var rect=RegionRaster.Rect(root,Width,Height);using var frame=RawCrop(root,rect);var clips=ClipTiming.EffectiveClips(root.Clips,time);var state=effects?Evaluate(clips,time,(SKRect)rect,GetLayer(root).Digits.Count>0):new MotionState();
+            if(!root.Enabled)continue;
+            if(!rasterRoots.Contains(root.Id))
+            {
+                if (!effects) continue;
+                var layer = GetLayer(root);
+                canvas.Save();
+                canvas.Translate(layer.Bounds.Left,layer.Bounds.Top);
+                foreach(var clip in ClipTiming.EffectiveClips(root.Clips,time))
+                    if(time>=clip.Start&&(time<clip.End||ProductInfo.HoldsDecoration(clip.Options.Kind)))
+                        DrawDecoration(canvas,layer.Bounds.Width,layer.Bounds.Height,clip,(float)ClipTiming.Progress(clip,time),1,root,layer.Image);
+                canvas.Restore();
+                continue;
+            }
+            var rect=RegionRaster.Rect(root,Width,Height);using var frame=RawCrop(root,rect);var clips=ClipTiming.EffectiveClips(root.Clips,time);var state=effects?Evaluate(clips,time,(SKRect)rect,GetLayer(root).Digits.Count>0):new MotionState();
             if(effects&&root.Role==RegionRole.Group)foreach(var child in regions.Where(r=>r.ParentId==root.Id&&r.Enabled).Reverse())ApplyArea(frame,child,rect,time);
             var roll=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.DigitRoll&&time>=c.Start&&time<c.End):null;
             var bounce=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Bounce&&time>=c.Start&&time<c.End):null;
@@ -105,12 +130,13 @@ public sealed partial class EffectScene
         }
         var clips=ClipTiming.EffectiveClips(area.Clips,time);var layer=GetLayer(area);var bounds=layer.Bounds;bounds.Offset(-parent.Left,-parent.Top);var state=Evaluate(clips,time,bounds,layer.Digits.Count>0);
         if(Identity(state)&&!clips.Any(c=>time>=c.Start&&(time<c.End||ProductInfo.HoldsDecoration(c.Options.Kind))))return;
+        var numeric=NumericAt(clips,layer,time);
         using var composed=frame.Copy();using(var c=new SKCanvas(composed))
         {
-            using(var erase=new SKPaint{BlendMode=SKBlendMode.DstOut})c.DrawImage(layer.EraseImage!,bounds.Left,bounds.Top,erase);c.DrawImage(layer.FillImage!,bounds.Left,bounds.Top);
+            if(numeric || !Identity(state)) DrawReplacement(c,layer,bounds.Left,bounds.Top,numeric);
             c.Save();Transform(c,bounds,state);ClipCrop(c,bounds,state);using var paint=new SKPaint{Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255))};
             var roll=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.DigitRoll&&time>=x.Start&&time<x.End);var bounce=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Bounce&&time>=x.Start&&time<x.End);
-            if((roll is not null||bounce is not null)&&layer.Digits.Count>0){c.Save();c.Translate(bounds.Left,bounds.Top);DrawDigits(c,layer,roll,bounce,time,paint);c.Restore();}else c.DrawImage(layer.Image,bounds.Left,bounds.Top,Sampling,paint);c.Translate(bounds.Left,bounds.Top);
+            if((roll is not null||bounce is not null)&&layer.Digits.Count>0){c.Save();c.Translate(bounds.Left,bounds.Top);DrawDigits(c,layer,roll,bounce,time,paint);c.Restore();}else if(!Identity(state)) c.DrawImage(layer.Image,bounds.Left,bounds.Top,Sampling,paint);c.Translate(bounds.Left,bounds.Top);
             foreach(var clip in clips)if(time>=clip.Start&&(time<clip.End||ProductInfo.HoldsDecoration(clip.Options.Kind)))DrawDecoration(c,bounds.Width,bounds.Height,clip,(float)ClipTiming.Progress(clip,time),state.Alpha,area,layer.Image);c.Restore();
         }
         using var masks=_maskRenderer.Render(area.Masks,frame.Width,frame.Height,Width,Height,parent,time);Multiply(composed,masks);

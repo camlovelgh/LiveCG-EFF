@@ -16,6 +16,8 @@ if(args.Contains("--linked-refresh")){Console.WriteLine(JsonSerializer.Serialize
 if(args.Contains("--linked-scene")){Console.WriteLine(JsonSerializer.Serialize(LinkedOutputChecks.MoveScene(folder,args.Last())));return 0;}
 if(args.Contains("--linked-output")){await LinkedOutputChecks.Run(folder,Check);Console.WriteLine($"RESULT {count-failures.Count}/{count} passed");return failures.Count==0?0:1;}
 if(args.Contains("--flat-output")){await LinkedOutputChecks.RunFlat(folder,Check);Console.WriteLine($"RESULT {count-failures.Count}/{count} passed");return failures.Count==0?0:1;}
+if(args.Contains("--blur-focus")){await BlurFocusChecks.Create(folder);return 0;}
+if(args.Contains("--nutri-composition")){await NutriCompositionChecks.Run(root,Check);return failures.Count==0?0:1;}
 ProjectSourceChecks.Run(folder,Check);
 if(args.Contains("--project-sources"))return failures.Count==0?0:1;
 void Reject(Action action,string name){try{action();Check(false,name);}catch(InvalidDataException){Check(true,name);}}

@@ -40,7 +40,7 @@ public sealed class BrowserExporter
             SourceImage.SavePng(source,Path.Combine(temporary,"original.png"));
             var assets=scene.WriteBrowserAssets(job.Regions,Path.Combine(temporary,"assets"),p=>progress?.Report(p*.8),cancellation);
             var regions=LayerGraph.Copy(SectionRules.RenderRegions(job),false);foreach(var r in regions)r.Cutout=null;
-            var payload=new{version=ProductInfo.Version,credit=ProductInfo.Credit,sourceName=job.FileName,width=job.Width,height=job.Height,fps=video.Fps,source="original.png",plan,playback=job.Playback,regions,assets,
+            var payload=new{version=ProductInfo.Version,credit=ProductInfo.Credit,sourceName=job.FileName,width=job.Width,height=job.Height,fps=video.Fps,source="original.png",plan,playback=job.Playback,regions,assets,blurFocus=job.BlurFocus?.ForOutput(regions),
                 seeds=job.Regions.SelectMany(r=>r.Clips).GroupBy(c=>c.Id).ToDictionary(g=>g.Key.ToString(),g=>unchecked((uint)g.Key.GetHashCode()))};
             await File.WriteAllTextAsync(Path.Combine(temporary,"data.js"),"window.LIVECG_DATA = "+JsonSerializer.Serialize(payload,Json)+";\n",Utf8,cancellation);
             foreach(var name in compact?new[]{"player.js","index.html"}:new[]{"player.js","index.html","preview.html"})

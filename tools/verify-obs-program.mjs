@@ -1,6 +1,6 @@
 // Isolated, portable OBS integration test. Never uses the user's profile or starts a stream/recording.
 import fs from 'node:fs/promises';import path from 'node:path';import {spawn,spawnSync} from 'node:child_process';import crypto from 'node:crypto';
-const root=path.resolve(process.argv[2]??'.'), portable=path.join(root,'artifacts/v010-obs-portable'),config=path.join(portable,'config/obs-studio'),password=crypto.randomBytes(24).toString('hex'),port=4469,results=[];
+const root=path.resolve(process.argv[2]??'.'), portable=path.resolve(root,process.env.LIVECG_OBS_PORTABLE??'artifacts/v010-obs-portable'),config=path.join(portable,'config/obs-studio'),password=crypto.randomBytes(24).toString('hex'),port=4469,results=[];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));const check=(ok,name)=>{results.push({ok:!!ok,name});console.log((ok?'PASS ':'FAIL ')+name);};
 try{await fs.access(path.join(portable,'bin/64bit/obs64.exe'));}catch{
     const installed=process.env.LIVECG_OBS_INSTALL??'C:/Program Files/obs-studio';
@@ -13,6 +13,25 @@ await fs.writeFile(path.join(config,'global.ini'),'[General]\nFirstRun=false\nLa
 await fs.mkdir(path.join(config,'basic/profiles/LiveCGTest'),{recursive:true});await fs.writeFile(path.join(config,'basic/profiles/LiveCGTest/basic.ini'),'[General]\nName=LiveCGTest\n[Video]\nBaseCX=160\nBaseCY=100\nOutputCX=160\nOutputCY=100\nFPSType=0\nFPSCommon=30\n');
 const linkedMode=process.argv.includes("--linked-output");
 const digitPreview=process.argv.includes("--digit-preview");
+const focusTimeline=process.argv.includes("--focus-timeline");
+const nutriAlpha=process.argv.includes("--nutri-alpha");
+const blurFocus=nutriAlpha||focusTimeline||process.argv.includes("--blur-focus");
+const nutriFixture=process.env.LIVECG_NUTRI_FIXTURE??'artifacts/nutri-alpha';
+const collection='LiveCGFocus'+Date.now();
+if(blurFocus){
+    const scenes=path.join(config,'basic/scenes');
+    await fs.mkdir(scenes,{recursive:true});
+    const settings={};
+    for(const [action,key] of Object.entries({next:'F9',previous:'F10',blur:'F11',home:'F12'})){
+        settings['livecg.focus.'+action]=[{key:'OBS_KEY_'+key}];
+    }
+    await fs.writeFile(path.join(scenes,collection+'.json'),JSON.stringify({
+        name:collection,current_scene:'Focus blank',current_program_scene:'Focus blank',
+        scene_order:[{name:'Focus blank'}],
+        sources:[{name:'Focus blank',uuid:crypto.randomUUID(),id:'scene',versioned_id:'scene',enabled:true,settings:{items:[]}}],
+        modules:{'scripts-tool':[{path:path.join(root,'tools/LiveCG-OBS-Hotkeys.lua').replaceAll('\\','/'),settings}]}
+    }));
+}
 const updateMode=linkedMode||process.argv.includes("--broadcast-updates");
 let updateFixture=updateMode&&!linkedMode?JSON.parse(await fs.readFile(path.join(root,"artifacts/v010-core/broadcast/browser-test.json"),"utf8")):null;
 if(linkedMode){
@@ -21,20 +40,28 @@ if(linkedMode){
  updateFixture={entry:linked.entry,first:{Revision:decode(linked.firstPointer).revision},second:{Revision:decode(linked.secondPointer).revision}};
  await fs.writeFile(linked.pointer??path.join(path.dirname(linked.entry),"pointer.js"),linked.firstPointer);
 }
-const folder=digitPreview?path.join(root,'artifacts/digit-preview-test.obs'):updateMode?path.dirname(updateFixture.entry):path.join(root,'artifacts/v010-core/한글 로컬 & 패키지.obs');
+const focusEntry=nutriAlpha?path.join(root,nutriFixture,'scoped/index.html'):blurFocus?JSON.parse(await fs.readFile(path.join(root,'artifacts/v010-core/blur-focus-test.json'),'utf8'))[focusTimeline?'timelineEntry':'entry']:null;
+const folder=blurFocus?path.dirname(focusEntry):digitPreview?path.join(root,'artifacts/digit-preview-test.obs'):updateMode?path.dirname(updateFixture.entry):path.join(root,'artifacts/v010-core/한글 로컬 & 패키지.obs');
 if(digitPreview){
     await fs.cp(path.join(root,'artifacts/v010-core/redraw-price.obs'),folder,{recursive:true});
     await fs.copyFile(path.join(root,'src/LiveCG.Core/Browser/player.js'),path.join(folder,'player.js'));
     await fs.appendFile(path.join(folder,'data.js'),'\nLIVECG_DATA.plan.endFrame=42;\n');
 }
-const html=await fs.readFile(linkedMode?updateFixture.entry:path.join(folder,updateMode?'entry.html':'index.html'),'utf8');
-const priceProbe=digitPreview?`const original=new Image();original.src=LIVECG_DATA.source;let pixels;
+const html=await fs.readFile(blurFocus?focusEntry:linkedMode?updateFixture.entry:path.join(folder,updateMode?'entry.html':'index.html'),'utf8');
+const priceProbe=nutriAlpha?`function originalPrice(){
+const c=document.querySelector("#livecg").getContext("2d");
+const edge=[...c.getImageData(0,1099,1080,1).data];
+const lower=c.getImageData(0,1100,1080,820).data;
+let clear=true;
+for(let i=3;i<lower.length;i+=4) if(lower[i]!==0){clear=false;break;}
+return {clear,edge:[...edge.slice(2000,2004)],side:[...c.getImageData(115,600,1,1).data]};
+}`:digitPreview?`const original=new Image();original.src=LIVECG_DATA.source;let pixels;
 function originalPrice(){if(!original.complete||!original.naturalWidth)return null;const canvas=document.getElementById("livecg");
 if(!pixels){const ref=document.createElement("canvas");ref.width=canvas.width;ref.height=canvas.height;const ctx=ref.getContext("2d");ctx.drawImage(original,0,0);pixels=ctx.getImageData(0,0,ref.width,ref.height).data;}
 const live=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;
 return pixels.every((value,index)=>value===live[index]);}`:'function originalPrice(){return null;}';
 const probe=html.replace('</body>',`<script>${priceProbe}
-setInterval(()=>{if(window.LiveCG)console.error("[OBS-PROBE] "+JSON.stringify({...LiveCG.status(),probe:"transition",originalPrice:originalPrice()}))},100);
+setInterval(()=>{if(window.LiveCG)console.error("[OBS-PROBE] "+JSON.stringify({...LiveCG.status(),probe:"transition",source:location.pathname.split("/").at(-1),originalPrice:originalPrice()}))},100);
 window.addEventListener("ProbeSeek",e=>LiveCG.renderAt(e.detail.time));</script></body>`);if(linkedMode)await fs.writeFile(updateFixture.entry,probe);else await fs.writeFile(path.join(folder,'obs-probe.html'),probe);
 const child=spawn(path.join(portable,'bin/64bit/obs64.exe'),['--portable','--multi','--disable-updater','--disable-missing-files-check','--disable-shutdown-check','--minimize-to-tray'],{cwd:path.join(portable,'bin/64bit'),windowsHide:true,stdio:'ignore'});
 let ws,seq=0;const pending=new Map();let logFile;const renderCaptures=[];
@@ -118,9 +145,158 @@ async function verifyBroadcastUpdates(){
   check(migratedPixels.status===0,"actual OBS renders the rebound scene from the moved folder");
  }
 }
+async function verifyBlurFocus(){
+    const blank='Focus blank', scene='Focus sequence', input='Focus browser';
+    await request('SetCurrentSceneCollection',{sceneCollectionName:collection});
+    const hotkeys=(await request('GetHotkeyList')).hotkeys;
+    check(['next','previous','blur','home'].every(action=>hotkeys.includes('livecg.focus.'+action)), 'all four Lua hotkeys registered in OBS');
+    await request('CreateScene',{sceneName:scene});
+    if(!(await request('GetStudioModeEnabled')).studioModeEnabled)await request('SetStudioModeEnabled',{studioModeEnabled:true});
+    await request('SetCurrentProgramScene',{sceneName:blank});
+    await request('CreateInput',{sceneName:scene,inputName:input,inputKind:'browser_source',inputSettings:{
+        is_local_file:true,local_file:path.join(folder,'obs-probe.html'),width:nutriAlpha?1080:160,height:nutriAlpha?1920:100,shutdown:false,restart_when_active:false
+    },sceneItemEnabled:true});
+    const otherScene='Other price', otherInput='Another browser';
+    const otherFolder=nutriAlpha?path.join(root,nutriFixture,'whole'):folder;
+    await fs.writeFile(path.join(otherFolder,'obs-other.html'),probe);
+    await request('CreateScene',{sceneName:otherScene});
+    await request('CreateInput',{sceneName:otherScene,inputName:otherInput,inputKind:'browser_source',inputSettings:{
+        is_local_file:true,local_file:path.join(otherFolder,'obs-other.html'),width:nutriAlpha?1080:160,height:nutriAlpha?1920:100,shutdown:false,restart_when_active:false
+    },sceneItemEnabled:true});
+    await request('SetCurrentPreviewScene',{sceneName:scene});
+    const transitions=await request('GetSceneTransitionList');
+    const cut=transitions.transitions.find(t=>t.transitionKind==='cut_transition');
+    if(cut)await request('SetCurrentSceneTransition',{transitionName:cut.transitionName});
+    await waitProbe(s=>s.loaded);
+    await request('TriggerStudioModeTransition');
+    let testSource='obs-probe.html';
+    async function latest(name=testSource){return (await samples()).findLast(state=>state.source===name);}
+    async function ready(test){
+        for(let i=0;i<65;i++){const state=await latest();if(test(state))return;await sleep(60);}
+        throw new Error('Focus state timeout: '+JSON.stringify(await latest()));
+    }
+    const settled=(index,s)=>s?.loaded&&s.focusIndex===index&&s.focusBlur===(index===-2?0:1)&&
+        s.focusWeights?.length===(nutriAlpha?2:3)&&s.focusWeights.every((value,i)=>value===(i===index?1:0));
+    const key=keyId=>request('TriggerHotkeyByKeySequence',{keyId:'OBS_KEY_'+keyId});
+    async function pixels(){
+        const shot=await request('GetSourceScreenshot',{sourceName:input,imageFormat:'bmp',imageWidth:160,imageHeight:100});
+        const bmp=Buffer.from(shot.imageData.split(',')[1],'base64');
+        if(bmp.subarray(0,2).toString()!=='BM')throw new Error('Expected a BMP screenshot');
+        const width=bmp.readInt32LE(18),height=bmp.readInt32LE(22),n=bmp.readUInt16LE(28)/8;
+        const offset=(x,y)=>bmp.readUInt32LE(10)+(height>0?height-y-1:y)*Math.ceil(width*n/4)*4+x*n;
+        return (x,y)=>{const i=offset(x,y);return [bmp[i+2],bmp[i+1],bmp[i]];};
+    }
+    await ready(s=>s?.programActive===true&&settled(-2,s));
+    if(nutriAlpha){
+        const safe = (s) => s?.originalPrice?.clear && s.originalPrice.edge[3]===255 &&
+            s.originalPrice.edge[0]>235 && s.originalPrice.edge[1]>115 && s.originalPrice.edge[2]>145;
+        await ready(s=>s?.programActive===true&&s.phase==='등장'&&s.time>.15&&s.time<.9&&safe(s));
+        check(true,'Nutri 6: original transparent strip and pink edge survive digit roll');
+        await ready(s=>s?.phase==='반복'&&s.time>1.2&&s.time<1.8&&safe(s));
+        const base=(await latest()).originalPrice.side;
+        check(true,'Nutri 6: original transparent strip and pink edge survive sweep');
+        await key('F9');
+        await ready(s=>s?.focusIndex===0&&s.focusBlur===1&&safe(s)&&s.originalPrice.side[1]>base[1]+30);
+        check(true,'Nutri 6: enlarged white card visible outside scoped blur');
+        await request('SetCurrentPreviewScene',{sceneName:otherScene});
+        await request('TriggerStudioModeTransition');
+        testSource='obs-other.html';
+        await ready(s=>s?.programActive===true&&s.focusIndex===-2&&safe(s));
+        await key('F9');
+        await ready(s=>s?.focusIndex===0&&s.focusBlur===1&&safe(s));
+        check(true,'Nutri 6: whole-frame blur keeps lower strip transparent and edge pink');
+        await key('F9');await ready(s=>s?.focusIndex===1&&s.focusBlur===1&&safe(s));
+        await key('F9');await ready(s=>s?.focusIndex===-2&&s.phase==='반복'&&safe(s));
+        check(true,'Nutri 6: both accents and return to repeat retain original transparency');
+        return;
+    }
+    if(focusTimeline){
+        await ready(s=>settled(-2,s)&&s.phase==='등장');
+        check(true,'normal timeline plays a ZoomIn entrance on program');
+        await ready(s=>settled(-2,s)&&s.phase==='반복'&&s.time>1.65);
+        check(true,'Glow repeat plays before any focus key');
+        await key('F9');await ready(s=>settled(0,s));
+        const held=(await latest()).time;
+        await sleep(650);
+        check((await latest()).time===held,'focus holds the same repeat frame');
+        await key('F9');await ready(s=>settled(1,s));
+        await key('F9');await ready(s=>settled(2,s));
+        await key('F9');await ready(s=>settled(-2,s)&&s.phase==='반복'&&s.time>1.55&&s.time<2);
+        check(true,'last focus returns to the beginning of the repeat without replaying ZoomIn');
+        await key('F9');await ready(s=>settled(0,s));
+        await key('F12');await ready(s=>settled(-2,s)&&s.phase==='반복'&&s.time>1.55&&s.time<2);
+        check(true,'existing Home key also returns to repeat');
+        return;
+    }
+    await request('SetCurrentPreviewScene',{sceneName:otherScene});
+    let cleanPixels=false;
+    for(let i=0;i<20&&!cleanPixels;i++){
+        const original=await pixels();
+        cleanPixels=Math.abs(original(52,24)[0]-original(54,24)[0])>220;
+        if(!cleanPixels)await sleep(100);
+    }
+    check(cleanPixels,'program waits on clean original pixels');
+    await key('F9');
+    await ready(s=>s?.focusIndex===0&&s.focusBlur>0&&s.focusBlur<1&&s.focusWeights?.[0]>0);
+    check(true,'F9 begins blur and first zoom together');
+    await ready(s=>settled(0,s));
+    const initial=await pixels();
+    check(initial(17,50)[0]>240&&initial(17,50)[1]<15,'first enlarged region extends past its original edge');
+    await sleep(1250);
+    check(settled(0,await latest()),'first region holds until key input');
+    check(settled(-2,await latest('obs-other.html')),'same hotkey leaves the preview-only browser on the original');
+    await key('F9');
+    await ready(s=>s?.focusIndex===1&&s.focusWeights?.[0]>.05&&s.focusWeights?.[1]>.05);
+    check(true,'F9 shrinks outgoing and enlarges incoming regions simultaneously');
+    await ready(s=>settled(1,s));
+    const second=await pixels();
+    check(second(63,50)[1]>240&&second(63,50)[0]<15&&second(17,50)[1]>15,'second region is sharp and first returns to blur');
+    await key('F9');await ready(s=>settled(2,s));
+    await key('F9');await ready(s=>settled(-2,s));await sleep(100);
+    const returned=await pixels();
+    check(Math.abs(returned(52,24)[0]-returned(54,24)[0])>220,'F9 after last emphasis restores clean original pixels');
+    await key('F9');await ready(s=>settled(0,s));
+    await key('F9');await ready(s=>settled(1,s));
+    await key('F10');await ready(s=>settled(0,s));
+    check(true,'F10 selects the previous region');
+    await key('F11');await ready(s=>settled(-1,s));
+    const reset=await pixels();
+    const a=reset(52,24)[0],b=reset(54,24)[0];
+    check(Math.abs(a-b)<15&&a>40&&a<210&&Math.abs(reset(2,2)[0]-reset(4,2)[0])>220,
+        'F11 blurs all selected content and leaves outside pixels unchanged');
+    await key('F9');await ready(s=>settled(0,s));
+    check(true,'next from full blur starts with the first region');
+    await key('F12');await ready(s=>settled(-2,s));
+    check(true,'F12 returns directly to the clean original');
+    await request('SetCurrentPreviewScene',{sceneName:otherScene});
+    await request('TriggerStudioModeTransition');
+    testSource='obs-other.html';
+    await ready(s=>s?.programActive===true&&settled(-2,s));
+    await key('F9');await ready(s=>settled(0,s));
+    check(settled(-2,await latest('obs-probe.html')),'same F9 automatically follows the new program browser without retargeting Lua');
+    const combined='Both prices';
+    await request('CreateScene',{sceneName:combined});
+    for(const sourceName of [input,otherInput]){
+        await request('CreateSceneItem',{sceneName:combined,sourceName,sceneItemEnabled:true});
+    }
+    await request('SetStudioModeEnabled',{studioModeEnabled:false});
+    await request('SetCurrentProgramScene',{sceneName:combined});
+    for(const sourceName of [input,otherInput]){
+        let active=false;
+        for(let i=0;i<20&&!active;i++){
+            active=(await request('GetSourceActive',{sourceName})).videoActive;
+            if(!active)await sleep(100);
+        }
+        if(!active)throw new Error('Combined scene source not active: '+sourceName);
+    }
+    await key('F12');await ready(s=>settled(-2,s));
+    await key('F9');await ready(s=>settled(0,s));
+    testSource='obs-probe.html';await ready(s=>settled(0,s));
+    check(true,'one key advances both browsers when both are on program');
+}
 try{
-    await connect();let version;for(let i=0;i<150;i++){try{version=await request('GetVersion');break;}catch(error){if(!error.message.includes('207'))throw error;await sleep(100);}}if(!version)throw new Error('OBS frontend initialization did not finish');check(version.obsVersion.startsWith('33.'),'isolated actual OBS 33 started with test-only profile');
-    if(updateMode){await verifyBroadcastUpdates();}else{
+    await connect();let version;for(let i=0;i<150;i++){try{version=await request('GetVersion');break;}catch(error){if(!error.message.includes('207'))throw error;await sleep(100);}}if(!version)throw new Error('OBS frontend initialization did not finish');check((blurFocus?/^(32|33)\./.test(version.obsVersion):version.obsVersion.startsWith('33.')),'isolated actual OBS '+version.obsVersion+' started with test-only profile');
+    if(blurFocus){await verifyBlurFocus();}else if(updateMode){await verifyBroadcastUpdates();}else{
     await request('CreateSceneCollection',{sceneCollectionName:'LiveCGProbe-'+Date.now()});
     for(const sceneName of ['LiveCG Blank','LiveCG Browser'])await request('CreateScene',{sceneName});
     const mode=await request('GetStudioModeEnabled');if(!mode.studioModeEnabled)await request('SetStudioModeEnabled',{studioModeEnabled:true});await request('SetCurrentProgramScene',{sceneName:'LiveCG Blank'});

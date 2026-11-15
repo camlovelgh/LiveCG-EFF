@@ -178,7 +178,7 @@
         const bounce = clips.filter(c => c.options.kind === "Bounce" && time >= c.start && time < c.start + c.duration).at(-1);
         if ((!roll && !bounce) || !a.digits.length) return false;
         const foreground = prepared?.image ?? image(a.image), backing = prepared?.backing ?? image(a.backing);
-        x.save(); if (roll) x.clip(shape(r, local(a)), "evenodd"); x.drawImage(backing, 0, 0); x.fillStyle = a.ink; x.textAlign = "left"; x.textBaseline = "alphabetic";
+        x.save(); if (roll) x.clip(shape(r, local(a)), "evenodd"); if (!a.digitErase) x.drawImage(backing, 0, 0); x.fillStyle = a.ink; x.textAlign = "left"; x.textBaseline = "alphabetic";
         a.digits.forEach((cell, i) => {
             const p = bounce ? progress(bounce, time) : 0, delayed = clamp((p - i / a.digits.length * .35) / .65), offset = bounce ? -Math.sin(delayed * Math.PI) * cell.height * .75 * power(bounce) : 0;
             const y = cell.y + offset;
@@ -225,19 +225,57 @@
         for (const c of clips) if (time >= c.start && (time < c.start + c.duration || holds(c.options.kind))) decoration(d, r, b.width, b.height, c, progress(c, time), s.alpha);
         d.restore(); multiply(decor, masks); frame.getContext("2d").drawImage(decor, 0, 0);
     }
+    function numericAt(a, clips, time) {
+        return a.digits.length > 0 && clips.some(c => ["DigitRoll", "Bounce"].includes(c.options.kind) && time >= c.start && time < c.start+c.duration);
+    }
+    function replaceSource(x, a, left, top, numeric) {
+        x.save(); x.globalCompositeOperation = "destination-out";
+        x.drawImage(image((numeric && a.digitErase) || a.erase), left, top);
+        x.globalCompositeOperation = "source-over";
+        x.drawImage(image((numeric && a.digitFill) || a.fill), left, top);
+        x.restore();
+    }
     function applySoftArea(frame,r,parent,time,a,clips){
         if(r.overlayOnly){const layer=blank(r.id+'-overlay-only',parent.width,parent.height),c=layer.getContext('2d');c.translate(a.x-parent.x,a.y-parent.y);for(const clip of clips)if(time>=clip.start&&(time<clip.start+clip.duration||holds(clip.options.kind)))decoration(c,r,a.width,a.height,clip,progress(clip,time),1);multiply(layer,maskCoverage(r,parent,time,r.id+'-overlay-masks'));frame.getContext('2d').drawImage(layer,0,0);return;}
         const b={x:a.x-parent.x,y:a.y-parent.y,width:a.width,height:a.height},s=motion(clips,time,b,a.digits.length>0);
         if(identity(s)&&!clips.some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind))))return;
         const composed=blank(r.id+"-soft-work",frame.width,frame.height),c=composed.getContext("2d");c.drawImage(frame,0,0);
-        c.globalCompositeOperation="destination-out";c.drawImage(image(a.erase),b.x,b.y);c.globalCompositeOperation="source-over";c.drawImage(image(a.fill),b.x,b.y);
-        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
+        if (numericAt(a, clips, time) || !identity(s)) replaceSource(c, a, b.x, b.y, numericAt(a, clips, time));
+        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else if(!identity(s)) c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
         for(const clip of clips)if(time>=clip.start&&(time<clip.start+clip.duration||holds(clip.options.kind)))decoration(c,r,b.width,b.height,clip,progress(clip,time),s.alpha);
         c.restore();const masks=maskCoverage(r,parent,time,r.id+"-masks");multiply(composed,masks);
         const f=frame.getContext("2d");f.globalCompositeOperation="destination-out";f.drawImage(masks,0,0);f.globalCompositeOperation="lighter";f.drawImage(composed,0,0);f.globalCompositeOperation="source-over";
     }
+    let sourceCoverage = null;
+    function prepareSourceCoverage() {
+        const coverage = document.createElement("canvas");
+        coverage.width = canvas.width;
+        coverage.height = canvas.height;
+        const paint = coverage.getContext("2d", { willReadFrequently: true });
+        paint.drawImage(image(data.source), 0, 0);
+        const pixels = paint.getImageData(0, 0, coverage.width, coverage.height);
+        const bytes = pixels.data;
+        let hasClearPixels = false;
+        for (let i = 3; i < bytes.length; i += 4) {
+            if (bytes[i] === 0) hasClearPixels = true;
+            else bytes[i] = 255;
+        }
+        if (!hasClearPixels) return;
+        paint.putImageData(pixels, 0, 0);
+        sourceCoverage = coverage;
+    }
     function render(time,rest=false) {
-        if(rest&&plan.restMode!=="Hold"){ctx.clearRect(0,0,canvas.width,canvas.height);if(plan.restMode!=="Transparent")ctx.drawImage(image(data.source),0,0);return;}
+        if (background && !timelineBeforeFocus && focusIndex === cleanFocus && focusProgress(performance.now()) >= 1 &&
+            manualTime === null && manualElapsed === null) {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.drawImage(image(data.source),0,0);
+            return;
+        }
+        if(rest&&plan.restMode!=="Hold"){
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            if(plan.restMode!=="Transparent" || (background && focusStarted)){ctx.drawImage(image(data.source),0,0);drawBlurFocus();}
+            return;
+        }
         ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(image(data.source), 0, 0);
         const roots = data.regions.filter(r => !r.parentId);
@@ -249,13 +287,27 @@
         });
         if(plain)for(const r of data.regions.filter(visible).slice().reverse()){const a=assets.get(r.id);ctx.save();ctx.translate(a.x,a.y);for(const c of effective(r.clips,time))if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))decoration(ctx,r,a.width,a.height,c,progress(c,time),1);ctx.restore();}
         if (!plain) {
+            const needsRaster = r => {
+                const a=assets.get(r.id), clips=effective(r.clips,time);
+                return r.masks.some(m=>m.enabled)||numericAt(a,clips,time)||!identity(motion(clips,time,a,a.digits.length>0))||
+                    r.role==="Group"&&data.regions.some(child=>child.parentId===r.id&&child.enabled&&
+                        (needsRaster(child)||effective(child.clips,time).some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))));
+            };
+            const rasterRoots=new Set(roots.filter(r=>!r.enabled||needsRaster(r)).map(r=>r.id));
             for (const r of roots) {
-                if (r.overlayOnly || r.enabled && r.background === "KeepOriginal") continue;
-                const a = assets.get(r.id); ctx.globalCompositeOperation = "destination-out"; ctx.drawImage(image(a.erase), a.x, a.y); ctx.globalCompositeOperation = "source-over"; ctx.drawImage(image(a.fill), a.x, a.y);
+                if (!rasterRoots.has(r.id) || r.overlayOnly || r.enabled && r.background === "KeepOriginal") continue;
+                const a = assets.get(r.id); replaceSource(ctx,a,a.x,a.y,r.enabled&&numericAt(a,effective(r.clips,time),time));
             }
             for (const r of roots.slice().reverse()) {
                 if (!r.enabled) continue;
                 const a = assets.get(r.id), clips = effective(r.clips, time), s = motion(clips, time, a, a.digits.length > 0);
+                if (!rasterRoots.has(r.id)) {
+                    ctx.save(); ctx.translate(a.x,a.y);
+                    for (const c of clips) if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))
+                        decoration(ctx,r,a.width,a.height,c,progress(c,time),1);
+                    ctx.restore();
+                    continue;
+                }
                 const frame = blank(r.id + "-frame", a.width, a.height), f = frame.getContext("2d"); f.drawImage(image(a.raw), 0, 0);
                 if (r.role === "Group") for (const child of data.regions.filter(c => c.parentId === r.id && c.enabled).slice().reverse()) applyArea(frame, child, a, time);
                 const number = blank(r.id + "-number", a.width, a.height);
@@ -271,9 +323,84 @@
                 ctx.restore();
             }
         }
+        if (sourceCoverage) multiply(canvas, sourceCoverage);
+        drawBlurFocus();
         if (plan.enabled && plan.exitFade && time >= B) {
             const alpha = plan.exitFrames <= 1 ? 0 : clamp((plan.endFrame - 1 - time * fps) / (plan.exitFrames - 1));
             ctx.globalCompositeOperation = "destination-in"; ctx.globalAlpha = alpha; ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+        }
+    }
+    const focus = data.blurFocus;
+    const focusRegion = id => data.regions.find(region => region.id === id);
+    const focusBounds = region => ({
+        x:region.bounds.x * canvas.width, y:region.bounds.y * canvas.height,
+        width:region.bounds.width * canvas.width, height:region.bounds.height * canvas.height
+    });
+    const blurRegion = focus && focusRegion(focus.backgroundId);
+    const background = !!(focus?.wholeFrame || blurRegion);
+    const focusSteps = focus?.steps.map(step => ({ ...step, region: focusRegion(step.regionId) })) ?? [];
+    const cleanFocus = -2;
+    const timelineBeforeFocus = !!background && focus.playTimelineBeforeFocus === true;
+    let heldTimeline = null;
+    let focusIndex = cleanFocus, focusFrom = [], blurFrom = 0, focusChange = 0, focusStarted = false;
+    const focusProgress = now => focusStarted ? clamp((now - focusChange) / (1000 * focus.seconds)) : 1;
+    const focusEase = now => { const p = focusProgress(now); return p * p * (3 - 2 * p); };
+    const focusBlur = now => {
+        const eased = focusEase(now);
+        return blurFrom * (1 - eased) + (focusIndex === cleanFocus ? 0 : eased);
+    };
+    function focusWeights(now) {
+        const eased = focusEase(now);
+        return focusSteps.map((_, i) => (focusFrom[i] ?? 0) * (1 - eased) + (i === focusIndex ? eased : 0));
+    }
+    function selectFocus(index) {
+        if (!background || !focusSteps.length || !loaded || waitingForProgram || programActive === false ||
+            (obsHost && programActive === null && data.playback.replayOnShow)) return;
+        if (index === focusIndex) return;
+        const now = performance.now();
+        if (timelineBeforeFocus && heldTimeline === null) {
+            const current = sample(elapsed());
+            heldTimeline = plan.enabled && (current.rest || current.time < A || current.time >= B)
+                ? sample(A)
+                : current;
+        }
+        focusFrom = focusWeights(now);
+        blurFrom = focusBlur(now);
+        focusIndex = index;
+        focusChange = now;
+        focusStarted = true;
+        lastFrame = -1;
+    }
+    function drawBlurFocus() {
+        if (!background || !focusStarted || waitingForProgram || programActive === false || manualTime !== null || manualElapsed !== null)
+            return;
+        const snapshot = copy("blur-focus-scene", canvas);
+        const amount = focus.blurPixels * focusBlur(performance.now());
+        if (amount > 0) {
+            const composite = blank("blur-focus-composite", canvas.width, canvas.height);
+            const paint = composite.getContext("2d");
+            paint.filter = `blur(${amount}px)`;
+            paint.drawImage(snapshot, 0, 0);
+            ctx.save();
+            if (blurRegion) ctx.clip(shape(blurRegion, focusBounds(blurRegion)), "evenodd");
+            ctx.globalCompositeOperation = "source-atop";
+            ctx.drawImage(composite, 0, 0);
+            ctx.restore();
+        }
+        const weights = focusWeights(performance.now());
+        const layers = focusSteps.map((step, i) => ({ step, i })).filter(({step,i}) => step.region && weights[i] > 0);
+        layers.sort((a, b) => Number(a.i === focusIndex) - Number(b.i === focusIndex));
+        for (const { step, i } of layers) {
+            const weight = weights[i];
+            const area = focusBounds(step.region);
+            const cx = area.x + area.width / 2, cy = area.y + area.height / 2;
+            const scale = 1 + (step.scale - 1) * weight;
+            ctx.save();
+            ctx.globalAlpha = weight;
+            ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy);
+            ctx.clip(shape(step.region, area), "evenodd");
+            ctx.drawImage(snapshot, 0, 0);
+            ctx.restore();
         }
     }
     let loaded = false, started = performance.now(), pausedAt = null, exitAt = null, lastFrame = -1, visible = true, manualTime = null, manualElapsed=null;
@@ -283,7 +410,7 @@
     const hasDigitRoll = data.regions.some(region => region.enabled && region.clips.some(
         clip => clip.enabled && clip.options.kind === "DigitRoll"));
     let obsHost=!!window.obsstudio,programActive=obsHost?storedActive():null;
-    const awaitingActivation = () => obsHost && (programActive === false || hasDigitRoll && programActive === null);
+    const awaitingActivation = () => obsHost && (programActive === false || (hasDigitRoll || background) && programActive === null);
     let waitingForProgram = data.playback.replayOnShow && awaitingActivation();
     const elapsed = () => waitingForProgram&&data.playback.replayOnShow?0:((pausedAt ?? performance.now()) - started) / 1000;
     const sample = e => {
@@ -292,35 +419,63 @@
         const at=e<A?0:(e-A)%CYCLE, rest=e>=A&&REST>0&&at>=LOOP-1e-9;
         return { time: e < A ? e : Math.min(B-1/fps,A+at), rest, phase: e < A ? "등장" : rest?"쉬기":exitAt === null ? "반복" : "반복 끝 대기" };
     };
+    const afterFocus = plan.enabled ? A : END;
+    function finishFocus(now) {
+        if (heldTimeline === null || focusIndex !== cleanFocus || focusProgress(now) < 1) return;
+        heldTimeline = null;
+        started = now - afterFocus * 1000;
+        pausedAt = null;
+        exitAt = null;
+        lastFrame = -1;
+    }
+    const displayedSample = () => manualElapsed === null && heldTimeline !== null ? heldTimeline : sample(manualElapsed ?? elapsed());
     const api = {
-        restart() { waitingForProgram=false;started = performance.now(); pausedAt = null; exitAt = null; manualTime = null; manualElapsed=null;lastFrame = -1; },
+        restart() { waitingForProgram=false;started = performance.now(); pausedAt = null; exitAt = null; manualTime = null; manualElapsed=null;lastFrame = -1; focusIndex=cleanFocus;focusStarted=false;focusFrom=[];blurFrom=0;heldTimeline=null; },
+        focusNext() { selectFocus(focusIndex < 0 ? 0 : focusIndex + 1 < focusSteps.length ? focusIndex + 1 : cleanFocus); },
+        focusPrevious() { if (focusIndex >= 0) selectFocus(focusIndex === 0 ? cleanFocus : focusIndex - 1); },
+        focusReset() { selectFocus(-1); },
+        focusHome() { selectFocus(cleanFocus); },
         exit() { if(data.playback.exitEnabled===false)return; if (pausedAt !== null) api.resume(); const e = elapsed(); manualTime = null; if (exitAt === null) exitAt = data.playback.exitAtLoopEnd ? (e < A ? A + LOOP : sample(e).rest?e:A + Math.floor((e - A) / CYCLE + 1e-9)*CYCLE+LOOP) : e; },
         pause() { if (pausedAt === null) pausedAt = performance.now(); },
         resume() { if (pausedAt !== null) { started += performance.now() - pausedAt; pausedAt = null; } manualTime = null;manualElapsed=null; },
         togglePause() { pausedAt === null ? api.pause() : api.resume(); },
         seek(seconds) { api.pause(); manualElapsed=null;manualTime = clamp(Number(seconds) || 0, 0, END); lastFrame = -1; if (loaded) render(manualTime); },
-        status() { const clock=manualElapsed??elapsed(),s = sample(clock); return { loaded, loopIndex:plan.enabled&&clock>=A?Math.floor((clock-A)/CYCLE):-1, ...s, ...(waitingForProgram&&data.playback.replayOnShow?{phase:"프로그램 대기"}:{}), ...(manualTime !== null ? { time: manualTime, phase: "프레임 확인" } : {}), paused: pausedAt !== null, exitRequested: exitAt !== null, visible,programActive,waitingForProgram, error: api.error ?? null }; },
+        status() { const clock=manualElapsed??elapsed(),s = displayedSample(); return { loaded, loopIndex:plan.enabled&&clock>=A?Math.floor((clock-A)/CYCLE):-1, ...s, ...(waitingForProgram&&data.playback.replayOnShow?{phase:"프로그램 대기"}:{}), ...(manualTime !== null ? { time: manualTime, phase: "프레임 확인" } : {}), paused: pausedAt !== null, exitRequested: exitAt !== null, visible,programActive,waitingForProgram, focusIndex, focusWeights:background?focusWeights(performance.now()):[], focusBlur:background?focusBlur(performance.now()):0, error: api.error ?? null }; },
         // Deterministic frame rendering is also used by browser/native regression checks.
         renderAt(seconds) { if (!loaded) throw new Error("이미지를 읽는 중입니다."); api.seek(seconds); return api.status(); },
         renderElapsedAt(seconds) { if(!loaded)throw new Error("이미지를 읽는 중입니다.");api.pause();manualTime=null;manualElapsed=Math.max(0,Number(seconds)||0);lastFrame=-1;const s=sample(manualElapsed);render(s.time,s.rest);return api.status(); }
     };
     window.LiveCG = api;
-    window.addEventListener("keydown", e => { if (e.ctrlKey || e.altKey || e.metaKey) return; if (e.code === "KeyR") api.restart(); else if (e.code === "KeyE") api.exit(); else if (e.code === "Space") api.togglePause(); else return; e.preventDefault(); });
+    const focusKeys = { ArrowRight:"focusNext", ArrowLeft:"focusPrevious", KeyB:"focusReset" };
+    window.addEventListener("keydown", e => { if (e.ctrlKey || e.altKey || e.metaKey) return; if (e.code === "KeyR") api.restart(); else if (e.code === "KeyE") api.exit(); else if (e.code === "Space") api.togglePause(); else if (focus && focusKeys[e.code]) { if (!e.repeat) api[focusKeys[e.code]](); } else return; e.preventDefault(); });
     window.addEventListener("obsSourceVisibleChanged", e => { if(typeof e.detail?.visible!=="boolean")return;const now=e.detail.visible;if(now===visible)return;visible=now;if(now&&data.playback.replayOnShow&&!obsHost)api.restart(); });
-    window.addEventListener("obsSourceActiveChanged",e=>{if(typeof e.detail?.active!=="boolean")return;obsHost=true;const next=e.detail.active;try{window.sessionStorage?.setItem(activeStorageKey,String(next));}catch{}if(next===programActive)return;programActive=next;if(!data.playback.replayOnShow){waitingForProgram=false;return;}api.restart();waitingForProgram=!next;});
-    window.addEventListener("LiveCGControl", e => { const v = e.detail ?? {}; if (v.target && v.target !== "all" && v.target !== data.sourceName) return; if (["restart", "exit", "pause", "resume"].includes(v.command)) api[v.command](); });
+    window.addEventListener("obsSourceActiveChanged",e=>{if(typeof e.detail?.active!=="boolean")return;obsHost=true;const next=e.detail.active;try{window.sessionStorage?.setItem(activeStorageKey,String(next));}catch{}if(next===programActive)return;programActive=next;lastFrame=-1;if(!data.playback.replayOnShow){waitingForProgram=false;if(next&&background)api.restart();return;}api.restart();waitingForProgram=!next;});
+    window.addEventListener("LiveCGControl", e => {
+        const v = e.detail ?? {};
+        if (v.target && v.target !== "all" && v.target !== data.sourceName) return;
+        if (["focusNext", "focusPrevious", "focusReset", "focusHome"].includes(v.command)) {
+            if (!background || !focusSteps.length || (window.LiveCGManagedFrame && !v.fromLoader)) return;
+            if (v.onProgram === true) { programActive=true; waitingForProgram=false; }
+            api[v.command]();
+        } else if (["restart", "exit", "pause", "resume"].includes(v.command)) api[v.command]();
+    });
     const names = new Set([data.source]);
-    for (const a of data.assets) { for (const key of ["raw", "shape", "numericShape", "image", "backing", "erase", "fill"]) if(a[key])names.add(a[key]); for(const glyph of a.rollGlyphs??[])names.add(glyph.image); for (const m of a.masks) names.add(m.image);for(const route of a.routes??[])for(const icon of Object.values(route.icons))names.add(icon); }
+    for (const a of data.assets) { for (const key of ["raw", "shape", "numericShape", "image", "backing", "erase", "fill", "digitErase", "digitFill"]) if(a[key])names.add(a[key]); for(const glyph of a.rollGlyphs??[])names.add(glyph.image); for (const m of a.masks) names.add(m.image);for(const route of a.routes??[])for(const icon of Object.values(route.icons))names.add(icon); }
     Promise.all([...names].map(name => new Promise((resolve, reject) => { const img = new Image(); img.onload = () => { images.set(name, img); resolve(); }; img.onerror = () => reject(new Error("이미지 로드 실패: " + name)); img.src = name; }))).then(() => {
+        prepareSourceCoverage();
         loaded = true; api.restart();waitingForProgram=data.playback.replayOnShow&&awaitingActivation(); const credit = document.getElementById("credit"); if (credit) credit.textContent = data.credit;
         document.title = "LiveCG-EFF · " + data.credit;
         function tick() {
             try {
-                const s = sample(manualElapsed??elapsed()), time = manualTime ?? s.time, frame = Math.floor(time * fps + 1e-7), rest=manualTime===null&&s.rest;
+                finishFocus(performance.now());
+                const s = displayedSample(), time = manualTime ?? s.time, frame = Math.floor(time * fps + 1e-7), rest=manualTime===null&&s.rest;
                 // A parked OBS preview must show the source price, not the first animated digit frame.
-                const showOriginal = hasDigitRoll && awaitingActivation() && manualTime === null && manualElapsed === null;
-                const key = showOriginal ? "obs-preview-original" : frame + (rest ? ":rest" : "");
-                if (key !== lastFrame) {
+                const showOriginal = (hasDigitRoll || timelineBeforeFocus) && awaitingActivation() && manualTime === null && manualElapsed === null;
+                const movingFocus = focusStarted && programActive !== false && manualTime === null && manualElapsed === null &&
+                    performance.now() <= focusChange + focus.seconds * 1000;
+                const settledFocus = !movingFocus && lastFrame === "focus-transition";
+                const key = showOriginal ? "obs-preview-original" : movingFocus ? "focus-transition" : frame + (rest ? ":rest" : "");
+                if (movingFocus || settledFocus || key !== lastFrame) {
                     if (showOriginal) {
                         ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
                         ctx.clearRect(0, 0, canvas.width, canvas.height);

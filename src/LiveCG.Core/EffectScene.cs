@@ -45,6 +45,9 @@ public sealed partial class EffectScene : IDisposable
     private static bool Identity(MotionState s)=>s.Alpha==1&&s.Scale==1&&s.ScaleX==1&&s.ScaleY==1&&s.X==0&&s.Y==0&&s.Angle==0&&!s.HasCrop;
     private static void ClipCrop(SKCanvas canvas,SKRect bounds,MotionState s)
     {if(s.HasCrop)canvas.ClipRect(SKRect.Create(bounds.Left+bounds.Width*s.CropLeft,bounds.Top+bounds.Height*s.CropTop,Math.Max(0,bounds.Width*(1-s.CropLeft-s.CropRight)),Math.Max(0,bounds.Height*(1-s.CropTop-s.CropBottom))));}
+    private static bool NumericAt(IReadOnlyList<EffectClip> clips, Layer layer, double time) =>
+        layer.Digits.Count > 0 && clips.Any(c => c.Options.Kind is EffectKind.DigitRoll or EffectKind.Bounce && time >= c.Start && time < c.End);
+
     private bool DrawStaticDecorations(SKCanvas canvas,IReadOnlyList<EffectRegion> regions,double time)
     {
         if(regions.Any(r=>r.ParentId is null&&!r.Enabled)||regions.Where(r=>LayerGraph.Visible(r,regions)).Any(r=>r.Masks.Any(m=>m.Enabled)))return false;
@@ -62,7 +65,7 @@ public sealed partial class EffectScene : IDisposable
         {
             var layer=GetLayer(region);var clips=ClipTiming.EffectiveClips(region.Clips,time);
             var state=effects?Evaluate(clips,time,layer.Bounds,layer.Digits.Count>0):new MotionState();
-            var numeric=effects&&clips.Any(c=>(c.Options.Kind is EffectKind.DigitRoll or EffectKind.Bounce)&&time>=c.Start&&time<c.End);
+            var numeric=effects&&NumericAt(clips,layer,time);
             var decor=effects&&clips.Any(c=>!ProductInfo.NeedsLayer(c.Options.Kind)&&time>=c.Start&&(time<c.End||ProductInfo.HoldsDecoration(c.Options.Kind)));
             return(Region:region,Layer:layer,Clips:clips,State:state,Numeric:numeric,Decor:decor);
         }).ToList();
@@ -71,10 +74,10 @@ public sealed partial class EffectScene : IDisposable
         // Remove all source instances before drawing any moving layer.
         foreach(var item in prepared)
         {
-            if(item.Region.OverlayOnly||item.Region.Enabled&&item.Region.Background==BackgroundMode.KeepOriginal)continue;
-            var layer=item.Layer;using var erase=new SKPaint{BlendMode=SKBlendMode.DstOut};
-            canvas.DrawImage(layer.EraseImage!,layer.Bounds.Left,layer.Bounds.Top,erase);
-            canvas.DrawImage(layer.FillImage!,layer.Bounds.Left,layer.Bounds.Top);
+            if(item.Region.OverlayOnly || item.Region.Enabled && (item.Region.Background==BackgroundMode.KeepOriginal ||
+                Identity(item.State) && !item.Numeric))continue;
+            var layer=item.Layer;
+            DrawReplacement(canvas, layer, layer.Bounds.Left, layer.Bounds.Top, item.Numeric && item.Region.Enabled);
         }
         foreach(var item in prepared.AsEnumerable().Reverse())
         {
@@ -87,7 +90,7 @@ public sealed partial class EffectScene : IDisposable
             var roll=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.DigitRoll&&time>=c.Start&&time<c.End):null;
             var bounce=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Bounce&&time>=c.Start&&time<c.End):null;
             if((roll is not null||bounce is not null)&&layer.Digits.Count>0)DrawDigits(canvas,layer,roll,bounce,time,paint);
-            else canvas.DrawImage(layer.Image,0,0,Sampling,paint);
+            else if(!Identity(state)) canvas.DrawImage(layer.Image,0,0,Sampling,paint);
             if(effects)foreach(var clip in clips)
             {
                 if(time<clip.Start||(time>=clip.End&&!ProductInfo.HoldsDecoration(clip.Options.Kind)))continue;
@@ -245,7 +248,7 @@ public sealed partial class EffectScene : IDisposable
     {
         canvas.Save();
         if(roll is not null)canvas.ClipPath(layer.Path,antialias:true);
-        canvas.DrawImage(layer.BackingImage, 0, 0, Sampling, paint);
+        if (!layer.Geometry.ContentOnly) canvas.DrawImage(layer.BackingImage, 0, 0, Sampling, paint);
         using var font = new SKFont(SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold), 40);
         using var textPaint = new SKPaint { Color = layer.Ink.WithAlpha(paint.Color.Alpha), IsAntialias = true };
         for (var i = 0; i < layer.Digits.Count; i++)
@@ -378,6 +381,14 @@ public sealed partial class EffectScene : IDisposable
 
     public void Dispose() { foreach (var layer in _layers.Values) layer.Dispose(); _layers.Clear();_maskRenderer.Dispose(); _image.Dispose(); }
 
+    private static void DrawReplacement(SKCanvas canvas, Layer layer, float x, float y, bool numeric)
+    {
+        if (numeric) layer.PrepareDigitReplacement();
+        using var erase = new SKPaint { BlendMode = SKBlendMode.DstOut };
+        canvas.DrawImage(numeric ? layer.DigitErase ?? layer.EraseImage! : layer.EraseImage!, x, y, erase);
+        canvas.DrawImage(numeric ? layer.DigitFill ?? layer.FillImage! : layer.FillImage!, x, y);
+    }
+
     private sealed class Layer : IDisposable
     {
         private readonly SKBitmap bitmap,backing;
@@ -403,6 +414,24 @@ public sealed partial class EffectScene : IDisposable
         public SKImage? NumericShapeImage { get; set; }
         public SKImage? EraseImage { get; }
         public SKImage? FillImage { get; }
+        public SKImage? DigitErase { get; private set; }
+        public SKImage? DigitFill { get; private set; }
+        public void PrepareDigitReplacement()
+        {
+            if (!Geometry.ContentOnly || Digits.Count == 0 || DigitErase is not null) return;
+            using var mask = new SKBitmap(Bitmap.Width, Bitmap.Height);
+            mask.Erase(SKColors.Transparent);
+            using (var canvas = new SKCanvas(mask))
+                foreach (var cell in Digits)
+                    canvas.DrawImage(Image, cell, cell);
+            MakeSupport(mask);
+            using var fill = mask.Copy();
+            using (var canvas = new SKCanvas(fill))
+            using (var paint = new SKPaint { Color = Background, BlendMode = SKBlendMode.SrcIn })
+                canvas.DrawRect(SKRect.Create(fill.Width, fill.Height), paint);
+            DigitErase = SKImage.FromBitmap(mask);
+            DigitFill = SKImage.FromBitmap(fill);
+        }
         public string? MaskData { get; }
         public SKRect Bounds { get; }
         public BackgroundMode Mode { get; }
@@ -413,7 +442,7 @@ public sealed partial class EffectScene : IDisposable
         public SKPath Path { get; }
         public List<SKRect> Digits { get; }
         public List<DigitRollSlot> RollSlots { get; }
-        public void Dispose() { RawImage?.Dispose();ShapeImage?.Dispose();NumericShapeImage?.Dispose();EraseImage?.Dispose();FillImage?.Dispose();Path.Dispose();Image.Dispose();BackingImage.Dispose();bitmap.Dispose();backing.Dispose(); }
+        public void Dispose() { RawImage?.Dispose();ShapeImage?.Dispose();NumericShapeImage?.Dispose();EraseImage?.Dispose();FillImage?.Dispose();DigitErase?.Dispose();DigitFill?.Dispose();Path.Dispose();Image.Dispose();BackingImage.Dispose();bitmap.Dispose();backing.Dispose(); }
     }
 }
 

@@ -454,6 +454,8 @@ public partial class MainWindow : Window
         {
             if(jobs.Any(job=>!File.Exists(job.SourcePath))){Notify("출력 전에 누락된 원본을 다시 연결하세요.");return;}
             var video=_video with{};var kinds=video.Output==OutputKind.Both?new[]{OutputKind.Webm,OutputKind.Browser}:new[]{video.Output};
+            if(kinds.Contains(OutputKind.Webm)&&jobs.Any(job=>job.BlurFocus?.ForOutput(job.Regions) is not null))
+            {Notify("순차 블러 강조는 키 입력이 필요한 OBS 브라우저 출력 전용입니다. 출력 방식을 OBS로 선택하세요.");return;}
             if(kinds.Contains(OutputKind.Webm))
             {
                 WebmExporter.ValidateOutputNames(jobs);
@@ -466,7 +468,7 @@ public partial class MainWindow : Window
             if(kinds.Contains(OutputKind.Browser)&&jobs.Select(j=>Path.GetFullPath(Target(j,OutputKind.Browser))).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=jobs.Count)
                 throw new InvalidOperationException("OBS 출력 경로가 겹칩니다. 자료 이름이나 연결을 확인하세요.");
             bool Exists(string path)=>File.Exists(path)||Directory.Exists(path);
-            if(jobs.Any(j=>j.Regions.All(r=>r.Clips.Count==0))&&MessageBox.Show(this,"효과가 없는 파일은 정지 영상으로 출력합니다. 계속할까요?","출력 확인",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
+            if(jobs.Any(j=>j.Regions.All(r=>r.Clips.Count==0)&&j.BlurFocus?.ForOutput(j.Regions) is null)&&MessageBox.Show(this,"효과가 없는 파일은 정지 영상으로 출력합니다. 계속할까요?","출력 확인",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             var overwrite=false;var existing=jobs.Sum(j=>kinds.Count(k=>Exists(Target(j,k))));
             if(existing>0)
             {

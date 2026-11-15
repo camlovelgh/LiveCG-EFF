@@ -171,6 +171,7 @@
    <TabItem Header="① 효과 · 21종">
     <DockPanel>
      <StackPanel DockPanel.Dock="Top"><TextBox x:Name="EffectSearchBox" ToolTip="효과 / 내 효과 검색" TextChanged="FilterEffects"/>
+      <Button Content="순차 블러 강조" Click="EditBlurFocus" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" ToolTip="블러 영역, 강조 순서와 전환 미리보기"/>
       <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
       <TextBlock Text="썸네일로 선택 효과 변경 · ＋로 새 효과 추가" TextWrapping="Wrap" Foreground="#A7BBC9" FontSize="10" Margin="4"/>
      </StackPanel><ScrollViewer VerticalScrollBarVisibility="Auto"><UniformGrid x:Name="EffectsGrid" Columns="3"/></ScrollViewer>

@@ -45,6 +45,12 @@ internal static class Program
             bitmap.Render(drawing);
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));using var output=File.Create(Path.Combine(folder,file));png.Save(output);
         }
+        if(args.Contains("--blur-focus-preview"))
+        {
+            BlurFocusPreviewChecks.Run(folder, Check);
+            Console.WriteLine($"RESULT {checks-failures.Count}/{checks} passed");
+            return failures.Count==0?0:1;
+        }
         if(args.Contains("--linked-ui"))
         {
             var fixture=JsonDocument.Parse(File.ReadAllText(Path.Combine(root,"artifacts/v010-core/linked-browser-test.json"))).RootElement;

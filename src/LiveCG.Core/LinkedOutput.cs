@@ -111,7 +111,11 @@ public static class LinkedOutput
                 var entry = Marker(job.BroadcastId) + Environment.NewLine + BroadcastUpdates.Loader()
                     .Replace("revisions/", relative + "revisions/").Replace("pointer.js?", relative + "pointer.js?");
                 if (!File.Exists(target)) Atomic(target, entry, overwrite: false);
-                else CheckTarget(target, job.BroadcastId, true);
+                else
+                {
+                    CheckTarget(target, job.BroadcastId, true);
+                    if (File.ReadAllText(target) != entry) Atomic(target, entry);
+                }
                 Atomic(Path.Combine(storage, "binding.json"), JsonSerializer.Serialize(new { entry = Path.GetFileName(target) }));
             }
             else

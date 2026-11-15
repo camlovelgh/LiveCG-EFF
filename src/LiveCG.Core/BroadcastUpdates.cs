@@ -170,11 +170,13 @@ public static class BroadcastUpdates
     internal const string Bridge = """
 <script>
 window.obsstudio={};
+window.LiveCGManagedFrame=parent!==window;
 window.addEventListener("message",event=>{
  if(event.source!==parent)return;
  const value=event.data;
- if(value?.type==="LiveCGCommand"&&["restart","exit","pause","resume","togglePause"].includes(value.command))window.LiveCG?.[value.command]();
- if(value?.type==="LiveCGEvent"&&["obsSourceActiveChanged","obsSourceVisibleChanged","LiveCGControl"].includes(value.name))window.dispatchEvent(new CustomEvent(value.name,{detail:value.detail}));
+ if(value?.type==="LiveCGCommand"&&["restart","exit","pause","resume","togglePause","focusNext","focusPrevious","focusReset"].includes(value.command))window.LiveCG?.[value.command]();
+ if(value?.type==="LiveCGEvent"&&["obsSourceActiveChanged","obsSourceVisibleChanged","LiveCGControl"].includes(value.name))
+  window.dispatchEvent(new CustomEvent(value.name,{detail:{...value.detail,fromLoader:true}}));
 });
 setInterval(()=>{if(window.LiveCG)parent.postMessage({type:"LiveCGStatus",state:LiveCG.status()},"*");},20);
 </script>
@@ -214,7 +216,16 @@ for(const name of ["obsSourceActiveChanged","obsSourceVisibleChanged","LiveCGCon
   dispatch(active,name,event.detail);
  });
 }
-window.addEventListener("keydown",event=>{if(event.code==="KeyR")api(active)?.restart();if(event.code==="KeyE")api(active)?.exit();if(event.code==="Space")api(active)?.togglePause();});
+window.addEventListener("keydown",event=>{
+ if(event.ctrlKey||event.altKey||event.metaKey)return;
+ const key={KeyR:"restart",KeyE:"exit",Space:"togglePause",ArrowRight:"focusNext",ArrowLeft:"focusPrevious",KeyB:"focusReset"}[event.code];
+ if(!key)return;
+ if(key.startsWith("focus")){
+  if(event.repeat||!api(active)?.status()?.focusWeights?.length)return;
+  send(active,{type:"LiveCGCommand",command:key});
+ }else api(active)?.[key]();
+ event.preventDefault();
+});
 window.LiveCG={
  status:()=>({...api(active)?.status(),revision:current,pending:pending?.dataset.revision??null,pendingError:api(pending)?.status()?.error??null}),
  restart:()=>api(active)?.restart(),exit:()=>api(active)?.exit(),pause:()=>api(active)?.pause(),resume:()=>api(active)?.resume()
