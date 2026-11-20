@@ -1,12 +1,16 @@
 # LiveCG-EFF
 
-**제작자 SunjooAn · 현재 버전 1.5.10 · Windows x64**
+**제작자 SunjooAn · 현재 버전 1.5.11 · Windows x64**
 
 이미지에서 마우스로 지정한 영역에 효과를 배치하고 **투명 WebM / OBS 브라우저 패키지**로 출력하는 라이브커머스 자막 편집기입니다. 가격 자동 탐지와 사운드는 포함하지 않습니다.
 
 ## 다운로드와 실행
 
 [공개 Windows 배포](https://github.com/sunjoo1968-design/LiveCG-EFF/releases/latest)에서 ZIP을 받아 압축을 풀고 최상단 **LiveCG-EFF.exe**를 실행하세요. app / 사용안내 / licenses 폴더를 함께 보관하세요. .NET·SkiaSharp·FFmpeg가 포함되어 별도 런타임 설치가 필요하지 않습니다.
+
+## v1.5.11 OBS 투명 경계 보정
+
+배포 폴더의 LiveCG-OBS-Hotkeys.lua v1.2로 기존 OBS 스크립트 파일을 교체하고 다시 불러오세요. 기본으로 켜진 **LiveCG 투명 경계 자동 보정**이 현재 장면 모음의 LiveCG 브라우저 소스에 **혼합 방식 → sRGB 끄기**를 적용합니다. 그룹과 중첩 장면, 새로 추가한 소스에도 적용됩니다. 원본 PNG와 기존 HTML은 그대로 사용할 수 있습니다. 필요하면 스크립트 창의 **지금 보정 적용**을 누르세요. 자동 보정을 끈 뒤에는 원하는 혼합 방식을 OBS에서 직접 선택할 수 있습니다.
 
 ## v1.5.10 가격 효과와 강조 영역 합성
 
