@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][int]$ParentId,
-    [Parameter(Mandatory=$true)][string]$Bundle
+    [Parameter(Mandatory=$true)][string]$Bundle,
+    [switch]$ShowProgress
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +13,14 @@ $completed = New-Object 'System.Collections.Generic.List[object]'
 $lock = $null
 $canClean = $false
 $failure = $null
+$progressWindow = $null
+
+function Show-InstallProgress([int]$Percent, [string]$Text) {
+    if ($null -eq $progressWindow) { return }
+    $progressBar.Value = $Percent
+    $progressLabel.Text = $Text
+    [Windows.Forms.Application]::DoEvents()
+}
 
 function Assert-OrdinaryPath([string]$Path) {
     while ($Path -ne $install) {
@@ -34,6 +43,23 @@ try {
     }
     Assert-OrdinaryPath $staging
     $canClean = $true
+    if ($ShowProgress) {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $progressWindow = New-Object Windows.Forms.Form
+        $progressWindow.Text = "$(Split-Path $Bundle -Leaf) 업데이트 · SunjooAn"
+        $progressWindow.ClientSize = [Drawing.Size]::new(420, 108)
+        $progressWindow.StartPosition = 'CenterScreen'
+        $progressWindow.FormBorderStyle = 'FixedDialog'
+        $progressWindow.ControlBox = $false
+        $progressLabel = New-Object Windows.Forms.Label
+        $progressLabel.SetBounds(20, 20, 380, 25)
+        $progressBar = New-Object Windows.Forms.ProgressBar
+        $progressBar.SetBounds(20, 54, 380, 20)
+        $progressWindow.Controls.AddRange(@($progressLabel, $progressBar))
+        $progressWindow.Show()
+        Show-InstallProgress 0 '설치 파일 확인 중…'
+    }
     $lock = [IO.FileStream]::new((Join-Path $install '.livecg-update.lock'), [IO.FileMode]::OpenOrCreate,
         [IO.FileAccess]::ReadWrite, [IO.FileShare]::None, 4096, [IO.FileOptions]::DeleteOnClose)
     $program = Join-Path $install 'app\LiveCG-EFF.exe'
@@ -60,6 +86,8 @@ try {
             Existed = [IO.File]::Exists($destination)
         }
     }
+    $total = @($pending).Count
+    $displayed = -1
     foreach ($file in $pending) {
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($file.Destination)) | Out-Null
         if ($file.Existed) {
@@ -69,6 +97,11 @@ try {
             [IO.File]::Move($file.Source, $file.Destination)
         }
         $completed.Add($file)
+        $percent = [int][Math]::Floor(100 * $completed.Count / $total)
+        if ($percent -ne $displayed) {
+            Show-InstallProgress $percent "설치 중 · ${percent}% ($($completed.Count) / $total 파일)"
+            $displayed = $percent
+        }
     }
 } catch {
     $failure = $_.Exception.Message
@@ -87,6 +120,7 @@ try {
     }
 } finally {
     if ($lock) { $lock.Dispose() }
+    if ($progressWindow) { $progressWindow.Dispose() }
 }
 
 if ($failure) {
