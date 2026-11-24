@@ -195,8 +195,8 @@
             }
         }); x.restore(); return true;
     }
-    function applyArea(frame, r, parent, time) {
-        const a = assets.get(r.id), clips = effective(r.clips, time); if (!clips.length) return;
+    function applyArea(frame, r, parent, time, clips) {
+        const a = assets.get(r.id); if (!clips.length) return;
         if(a.customRaster||r.softness?.enabled||r.contentOnly){applySoftArea(frame,r,parent,time,a,clips);return;}
         const b = { x: r.bounds.x * data.width - parent.x, y: r.bounds.y * data.height - parent.y, width: r.bounds.width * data.width, height: r.bounds.height * data.height };
         const numeric = a.digits.length > 0 && clips.some(c => ["DigitRoll", "Bounce"].includes(c.options.kind) && time >= c.start && time < c.start + c.duration), s = motion(clips, time, b, numeric);
@@ -264,7 +264,7 @@
         paint.putImageData(pixels, 0, 0);
         sourceCoverage = coverage;
     }
-    function render(time,rest=false) {
+    function render(time,rest=false,holdOriginalPrice=false) {
         if (background && !timelineBeforeFocus && focusIndex === cleanFocus && focusProgress(performance.now()) >= 1 &&
             manualTime === null && manualElapsed === null) {
             ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -278,29 +278,32 @@
         }
         ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(image(data.source), 0, 0);
+        const clipsFor = r => effective(holdOriginalPrice
+            ? r.clips.filter(clip => clip.options.kind !== "DigitRoll")
+            : r.clips, time);
         const roots = data.regions.filter(r => !r.parentId);
         const visible = r => r.enabled && (!r.parentId || data.regions.find(p => p.id === r.parentId)?.enabled);
         const plain = roots.every(r => r.enabled) && data.regions.filter(visible).every(r => {
             if (r.masks.some(m => m.enabled)) return false;
-            const a = assets.get(r.id), clips = effective(r.clips, time), state = motion(clips, time, a, a.digits.length > 0);
+            const a = assets.get(r.id), clips = clipsFor(r), state = motion(clips, time, a, a.digits.length > 0);
             return identity(state) && !clips.some(c => time >= c.start && time < c.start+c.duration && ["DigitRoll", "Bounce"].includes(c.options.kind));
         });
-        if(plain)for(const r of data.regions.filter(visible).slice().reverse()){const a=assets.get(r.id);ctx.save();ctx.translate(a.x,a.y);for(const c of effective(r.clips,time))if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))decoration(ctx,r,a.width,a.height,c,progress(c,time),1);ctx.restore();}
+        if(plain)for(const r of data.regions.filter(visible).slice().reverse()){const a=assets.get(r.id);ctx.save();ctx.translate(a.x,a.y);for(const c of clipsFor(r))if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))decoration(ctx,r,a.width,a.height,c,progress(c,time),1);ctx.restore();}
         if (!plain) {
             const needsRaster = r => {
-                const a=assets.get(r.id), clips=effective(r.clips,time);
+                const a=assets.get(r.id), clips=clipsFor(r);
                 return r.masks.some(m=>m.enabled)||numericAt(a,clips,time)||!identity(motion(clips,time,a,a.digits.length>0))||
                     r.role==="Group"&&data.regions.some(child=>child.parentId===r.id&&child.enabled&&
-                        (needsRaster(child)||effective(child.clips,time).some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))));
+                        (needsRaster(child)||clipsFor(child).some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))));
             };
             const rasterRoots=new Set(roots.filter(r=>!r.enabled||needsRaster(r)).map(r=>r.id));
             for (const r of roots) {
                 if (!rasterRoots.has(r.id) || r.overlayOnly || r.enabled && r.background === "KeepOriginal") continue;
-                const a = assets.get(r.id); replaceSource(ctx,a,a.x,a.y,r.enabled&&numericAt(a,effective(r.clips,time),time));
+                const a = assets.get(r.id); replaceSource(ctx,a,a.x,a.y,r.enabled&&numericAt(a,clipsFor(r),time));
             }
             for (const r of roots.slice().reverse()) {
                 if (!r.enabled) continue;
-                const a = assets.get(r.id), clips = effective(r.clips, time), s = motion(clips, time, a, a.digits.length > 0);
+                const a = assets.get(r.id), clips = clipsFor(r), s = motion(clips, time, a, a.digits.length > 0);
                 if (!rasterRoots.has(r.id)) {
                     ctx.save(); ctx.translate(a.x,a.y);
                     for (const c of clips) if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))
@@ -309,7 +312,7 @@
                     continue;
                 }
                 const frame = blank(r.id + "-frame", a.width, a.height), f = frame.getContext("2d"); f.drawImage(image(a.raw), 0, 0);
-                if (r.role === "Group") for (const child of data.regions.filter(c => c.parentId === r.id && c.enabled).slice().reverse()) applyArea(frame, child, a, time);
+                if (r.role === "Group") for (const child of data.regions.filter(c => c.parentId === r.id && c.enabled).slice().reverse()) applyArea(frame, child, a, time, clipsFor(child));
                 const number = blank(r.id + "-number", a.width, a.height);
                 const numeric=digits(number.getContext("2d"), r, a, clips, time);
                 if (numeric) { f.clearRect(0, 0, a.width, a.height); f.drawImage(number, 0, 0); }
@@ -469,18 +472,14 @@
             try {
                 finishFocus(performance.now());
                 const s = displayedSample(), time = manualTime ?? s.time, frame = Math.floor(time * fps + 1e-7), rest=manualTime===null&&s.rest;
-                // A parked OBS preview must show the source price, not the first animated digit frame.
-                const showOriginal = (hasDigitRoll || timelineBeforeFocus) && awaitingActivation() && manualTime === null && manualElapsed === null;
+                // Keep the price readable while letting the rest of the scene wait on its entrance frame.
+                const parked = data.playback.replayOnShow && awaitingActivation() && manualTime === null && manualElapsed === null;
                 const movingFocus = focusStarted && programActive !== false && manualTime === null && manualElapsed === null &&
                     performance.now() <= focusChange + focus.seconds * 1000;
                 const settledFocus = !movingFocus && lastFrame === "focus-transition";
-                const key = showOriginal ? "obs-preview-original" : movingFocus ? "focus-transition" : frame + (rest ? ":rest" : "");
+                const key = parked ? "obs-preview" : movingFocus ? "focus-transition" : frame + (rest ? ":rest" : "");
                 if (movingFocus || settledFocus || key !== lastFrame) {
-                    if (showOriginal) {
-                        ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(image(data.source), 0, 0);
-                    } else render(frame / fps, rest);
+                    render(parked ? 0 : frame / fps, !parked && rest, parked && hasDigitRoll);
                     lastFrame = key;
                 }
                 const label = document.getElementById("status"); if (label) label.textContent = `${s.phase} · ${time.toFixed(2)}초`;

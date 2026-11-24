@@ -12,7 +12,8 @@ await fs.writeFile(path.join(config,'plugin_config/obs-websocket/config.json'),J
 await fs.writeFile(path.join(config,'global.ini'),'[General]\nFirstRun=false\nLastVersion=553648128\nEnableAutoUpdates=false\n\n[Basic]\nProfile=LiveCGTest\nProfileDir=LiveCGTest\nSceneCollection=LiveCGTest\nSceneCollectionFile=LiveCGTest\n\n[BasicWindow]\nStudioMode=true\n');
 await fs.mkdir(path.join(config,'basic/profiles/LiveCGTest'),{recursive:true});await fs.writeFile(path.join(config,'basic/profiles/LiveCGTest/basic.ini'),'[General]\nName=LiveCGTest\n[Video]\nBaseCX=160\nBaseCY=100\nOutputCX=160\nOutputCY=100\nFPSType=0\nFPSCommon=30\n');
 const linkedMode=process.argv.includes("--linked-output");
-const digitPreview=process.argv.includes("--digit-preview");
+const mixedEntrance=process.argv.includes("--mixed-entrance");
+const digitPreview=mixedEntrance||process.argv.includes("--digit-preview");
 const focusTimeline=process.argv.includes("--focus-timeline");
 const nutriAlpha=process.argv.includes("--nutri-alpha");
 const blurFocus=nutriAlpha||focusTimeline||process.argv.includes("--blur-focus");
@@ -45,7 +46,7 @@ const folder=blurFocus?path.dirname(focusEntry):digitPreview?path.join(root,'art
 if(digitPreview){
     await fs.cp(path.join(root,'artifacts/v010-core/redraw-price.obs'),folder,{recursive:true});
     await fs.copyFile(path.join(root,'src/LiveCG.Core/Browser/player.js'),path.join(folder,'player.js'));
-    await fs.appendFile(path.join(folder,'data.js'),'\nLIVECG_DATA.plan.endFrame=42;\n');
+    await fs.appendFile(path.join(folder,'data.js'),'\nLIVECG_DATA.plan.endFrame=42;\n'+(mixedEntrance?'LIVECG_DATA.regions[1].clips[0].options.kind="ZoomIn";':''));
 }
 const html=await fs.readFile(blurFocus?focusEntry:linkedMode?updateFixture.entry:path.join(folder,updateMode?'entry.html':'index.html'),'utf8');
 const priceProbe=nutriAlpha?`function originalPrice(){
@@ -59,6 +60,17 @@ return {clear,edge:[...edge.slice(2000,2004)],side:[...c.getImageData(115,600,1,
 function originalPrice(){if(!original.complete||!original.naturalWidth)return null;const canvas=document.getElementById("livecg");
 if(!pixels){const ref=document.createElement("canvas");ref.width=canvas.width;ref.height=canvas.height;const ctx=ref.getContext("2d");ctx.drawImage(original,0,0);pixels=ctx.getImageData(0,0,ref.width,ref.height).data;}
 const live=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;
+if(${mixedEntrance}){
+ const bounds=LIVECG_DATA.assets[1];
+ let price=true,photo=true;
+ for(let i=0;i<live.length;i++){
+  if(pixels[i]===live[i])continue;
+  const x=Math.floor(i/4)%canvas.width,y=Math.floor(i/4/canvas.width);
+  if(x>=bounds.x&&x<bounds.x+bounds.width&&y>=bounds.y&&y<bounds.y+bounds.height)photo=false;
+  else price=false;
+ }
+ return {price,photo};
+}
 return pixels.every((value,index)=>value===live[index]);}`:'function originalPrice(){return null;}';
 const probe=html.replace('</body>',`<script>${priceProbe}
 setInterval(()=>{if(window.LiveCG)console.error("[OBS-PROBE] "+JSON.stringify({...LiveCG.status(),probe:"transition",source:location.pathname.split("/").at(-1),originalPrice:originalPrice()}))},100);
@@ -306,18 +318,24 @@ try{
     await request('SetCurrentPreviewScene',{sceneName:'LiveCG Browser'});
     let rows=await waitProbe(s=>s.loaded);await sleep(700);rows=await samples();const last=rows.at(-1);const sourceState=await request('GetSourceActive',{sourceName:inputName});
     check(sourceState.videoShowing&&!sourceState.videoActive&&last?.loaded,'actual OBS preview is showing but not program-active before transition');
-    if(digitPreview)check(last?.originalPrice===true,'parked OBS preview displays original price pixels');
-    const transitions=await request('GetSceneTransitionList');const cut=transitions.transitions.find(t=>t.transitionKind==='cut_transition');if(cut)await request('SetCurrentSceneTransition',{transitionName:cut.transitionName});
+    const originalPrice=s=>mixedEntrance?s?.originalPrice?.price:s?.originalPrice;
+    if(mixedEntrance)check(last?.originalPrice?.photo===false,"mixed preview prepares the zoom entrance layer before switching scenes");
+    if(digitPreview)check(originalPrice(last)===true,'parked OBS preview displays original price pixels');
+    const transitions=await request('GetSceneTransitionList');
+    const useFade=process.argv.includes('--scene-fade');
+    const transition=transitions.transitions.find(t=>t.transitionKind===(useFade?'fade_transition':'cut_transition'));
+    if(transition)await request('SetCurrentSceneTransition',{transitionName:transition.transitionName});
+    if(useFade)await request('SetCurrentSceneTransitionDuration',{transitionDuration:200});
     const before=rows.length;await request('TriggerStudioModeTransition');rows=await waitProbe((s,i)=>s.programActive===true&&s.time<.3);await sleep(350);rows=await samples();const shown=rows.slice(before).filter(s=>s.programActive===true);
     check(shown.length>0&&shown[0].time<.3&&!shown[0].waitingForProgram,'actual preview-to-program transition starts entrance from frame zero');
-    if(digitPreview)check(shown.some(s=>s.originalPrice===false),'program displays rolling price pixels');
+    if(digitPreview)check(shown.some(s=>originalPrice(s)===false),'program displays rolling price pixels');
     await sleep(500);rows=await samples();check(rows.at(-1)?.time>.4,'actual program playback advances after the first entrance frame');
     if(digitPreview){
-        rows=await waitProbe(s=>s.programActive&&s.phase==='완료'&&s.originalPrice===true);
-        check(rows.some(s=>s.programActive&&s.phase==='완료'&&s.originalPrice===true),'program stops on original price pixels');
+        rows=await waitProbe(s=>s.programActive&&s.phase==='완료'&&originalPrice(s)===true);
+        check(rows.some(s=>s.programActive&&s.phase==='완료'&&originalPrice(s)===true),'program stops on original price pixels');
     }
     await request('SetCurrentPreviewScene',{sceneName:'LiveCG Blank'});await request('TriggerStudioModeTransition');await sleep(400);rows=await samples();check(rows.at(-1)?.waitingForProgram&&rows.at(-1)?.time<.01,'returning source to preview resets the waiting frame');
-    if(digitPreview)check(rows.at(-1)?.originalPrice===true,'returning to preview shows the original price again');
+    if(digitPreview)check(originalPrice(rows.at(-1))===true,'returning to preview shows the original price again');
     await request('SetCurrentPreviewScene',{sceneName:'LiveCG Browser'});await sleep(700);const start=(await samples()).length;await request('TriggerStudioModeTransition');await sleep(500);rows=(await samples()).slice(start).filter(s=>s.programActive===true);check(rows.length>0&&rows[0].time<.3,'second actual program transition replays entrance even after a long preview');
     if(!digitPreview){
     const reloadStart=(await samples()).length;await request('PressInputPropertiesButton',{inputName,propertyName:'refreshnocache'});await sleep(1000);rows=(await samples()).slice(reloadStart);check(rows.some(s=>s.loaded&&!s.waitingForProgram&&s.time>.1),'actual source refresh while program-active also starts playback');

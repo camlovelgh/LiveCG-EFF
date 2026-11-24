@@ -14,6 +14,7 @@ Copy-Item -LiteralPath $taskFfmpeg.FullName -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $taskFfmpeg.DirectoryName 'ffprobe.exe') -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $taskVendor 'LICENSE'),(Join-Path $taskVendor 'README.txt') -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LiveCG-OBS-Hotkeys.lua') -Destination $taskPublish -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'InstallUpdate.ps1') -Destination $taskAppFolder -Force
 $taskGuide = Join-Path $taskPublish '사용안내'
 New-Item -ItemType Directory -Path $taskGuide -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $taskRoot 'README.md'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskGuide -Force

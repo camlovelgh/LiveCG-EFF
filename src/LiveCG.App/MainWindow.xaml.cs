@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();Title=$"{ProductInfo.Name} · {ProductInfo.Credit}";CreditText.Text=ProductInfo.Credit;FileList.ItemsSource=_jobs;
+        ContentRendered += CheckForUpdateOnStartup;
         var area=SystemParameters.WorkArea;MinWidth=Math.Min(MinWidth,area.Width*.9);MinHeight=Math.Min(MinHeight,area.Height*.9);
         Width=Math.Min(Width,area.Width*.95);Height=Math.Min(Height,area.Height*.95);
         EditorGrid.SizeChanged+=(_,args)=>
