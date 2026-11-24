@@ -36,9 +36,6 @@
      <MenuItem Header="현재 옵션을 기본값으로 저장" Click="SaveDefaults"/><MenuItem Header="기본값 복원" Click="ResetDefaults"/>
      <MenuItem Header="단축키 설정" Click="ConfigureShortcuts"/><MenuItem Header="배치 초기화" Click="ResetWorkspace"/>
     </MenuItem>
-    <MenuItem Header="이전 방식">
-     <MenuItem Header="방송 갱신 ZIP 저장" Click="ExportBroadcastUpdates"/><MenuItem Header="방송 자료 관리" Click="OpenBroadcastManager"/>
-    </MenuItem>
    </Menu>
    <Button Content="도움말" Click="ShowHelp"/>  </StackPanel></ScrollViewer>
   <Grid Grid.Row="2" x:Name="EditorGrid">
@@ -260,7 +257,7 @@
      <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarMouseWheel" ToolTip="재생·구간 도구줄 · 휠로 좌우 이동"><StackPanel Orientation="Horizontal"><Button x:Name="PlayButton" Content="▶ 재생" Click="TogglePlayback" Padding="10,5"/><Button Content="처음" Click="Rewind" Padding="8,5"/>
-       <TextBlock x:Name="TimeText" Text="0.00 / 1.00초" Margin="8,0" Foreground="#B9D0DD"/>
+       <TextBlock x:Name="TimeText" Margin="8,0" Foreground="#B9D0DD"/>
        <ComboBox x:Name="PlaybackViewBox" Width="145" SelectionChanged="PlaybackViewChanged"/><CheckBox x:Name="LoopPreviewCheck" Content="미리보기 반복" IsChecked="True"/><ComboBox x:Name="SectionModeBox" Width="140" SelectionChanged="SectionModeChanged"/><Button x:Name="SectionsButton" Content="구간 설정" Click="ConfigurePlayback" Padding="8,5"/><Button Content="반복 연결 확인" Click="CompareLoopEdges" Padding="8,5"/>
        <CheckBox x:Name="BroadcastPreviewCheck" Visibility="Collapsed" Content="방송 재생" ToolTip="등장 한 번 → 반복 구간 유지 → 퇴장 버튼 · 처음 버튼으로 재등장 준비" Checked="BroadcastModeChanged" Unchecked="BroadcastModeChanged"/><Button x:Name="ExitPlaybackButton" Content="퇴장" Click="ExitPlayback" Padding="8,5"/></StackPanel></ScrollViewer>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button Content="−" Click="TimelineZoomOut" Padding="10,5"/><Button Content="＋" Click="TimelineZoomIn" Padding="10,5"/></StackPanel>

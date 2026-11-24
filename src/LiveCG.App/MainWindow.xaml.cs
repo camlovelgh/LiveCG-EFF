@@ -306,7 +306,7 @@ public partial class MainWindow : Window
         Preview.OutputOpacity=plan?.Opacity(_time)??1;
         ExitPlaybackButton.IsEnabled=!_busy&&_current?.Playback.Enabled==true&&_current.Playback.ExitEnabled!=false;
         RefreshOutputSettings();TimelineEditor.SetVideo(_video);TimelineEditor.CursorTime=_time;TimelineEditor.InvalidateVisual();
-        TimeText.Text=$"{_time:0.00} / {resolved.ActualDuration:0.00}초";LoadContextLabels();Preview.InvalidateVisual();
+        UpdateTimeText();LoadContextLabels();Preview.InvalidateVisual();
     }
     private void ShowVideo()
     {
@@ -327,7 +327,12 @@ public partial class MainWindow : Window
     {
         Preview.RestDisplay=null;_time=Math.Max(0,time);Preview.Time=_time;Preview.OutputOpacity=_current is null?1:PlaybackPlan.Create(_current,_video).Opacity(_time);TimelineEditor.CursorTime=_time;
         if(effects){EffectsPreviewCheck.IsChecked=true;Preview.ShowEffects=true;}
-        TimeText.Text=$"{_time:0.00} / {ResolvedVideo.ActualDuration:0.00}초";Preview.InvalidateVisual();TimelineEditor.InvalidateVisual();
+        UpdateTimeText();Preview.InvalidateVisual();TimelineEditor.InvalidateVisual();
+    }
+    private void UpdateTimeText()
+    {
+        var frame = Math.Round(_time * _video.Fps, MidpointRounding.AwayFromZero);
+        TimeText.Text = $"{frame:0}프레임 / {frame / _video.Fps:0.00}초";
     }
     private void TogglePlayback(object sender,RoutedEventArgs e)
     {
