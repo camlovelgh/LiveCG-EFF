@@ -41,7 +41,7 @@ public partial class MainWindow : Window
             var compact=args.NewSize.Height<500;
             if(compact&&EditorGrid.RowDefinitions[2].Height.Value>280)EditorGrid.RowDefinitions[2].Height=new GridLength(260);
         };
-        Choices(FpsBox,["24","30","60"]);foreach(var quality in Qualities)QualityBox.Items.Add(quality);
+        Choices(FpsBox,[VideoOptions.DefaultFps.ToString(),"24","60"]);foreach(var quality in Qualities)QualityBox.Items.Add(quality);
         Choices(ShapeBox,["사각형","원 / 타원","둥근 사각형","자유손","포인트 펜"]);Choices(ExportScopeBox,["전체 파일","선택 파일","현재 파일"]);ExportScopeBox.SelectedIndex=0;
         Choices(LoopPeriodBox,["0.25","0.5","1","1.5","2","3","5"]);
         Choices(EndHoldBox,["0","0.5","1","2","3"]);Choices(ClipDurationBox,["0.5","0.8","1","1.5","2","3","5"]);
@@ -310,7 +310,11 @@ public partial class MainWindow : Window
     }
     private void ShowVideo()
     {
-        var previous=_loading;_loading=true;FpsBox.Text=_video.Fps.ToString();ShowQuality();EndHoldBox.Text=F(_video.EndHold);OutputKindBox.SelectedIndex=_video.Output switch{OutputKind.Browser=>0,OutputKind.Webm=>1,_=>2};ExportButton.Content="출력 시작";_loading=previous;RefreshTimeline();
+        var previous=_loading;_loading=true;
+        var fps = _video.Fps.ToString();
+        FpsBox.SelectedItem = FpsBox.Items.Contains(fps) ? fps : null;
+        FpsBox.Text = fps;
+        ShowQuality();EndHoldBox.Text=F(_video.EndHold);OutputKindBox.SelectedIndex=_video.Output switch{OutputKind.Browser=>0,OutputKind.Webm=>1,_=>2};ExportButton.Content="출력 시작";_loading=previous;RefreshTimeline();
     }
     private bool CommitVideo(bool report)
     {
@@ -372,7 +376,12 @@ public partial class MainWindow : Window
                 using var json=System.Text.Json.JsonDocument.Parse(File.ReadAllText(DocumentStore.DefaultsPath));
                 if(!json.RootElement.TryGetProperty("Playback",out var policy)||!policy.TryGetProperty("LoopRest",out _))defaults.Playback.LoopRest=1;
             }
-            _video=defaults.Video with{Output=OutputKind.Browser};_defaultPlayback=defaults.Playback with{};_defaultEffect=defaults.Effect;_defaultClipDuration=defaults.ClipDuration;_defaultLoop=defaults.Loop;_defaultLoopPeriod=defaults.LoopPeriod;_defaultMotion=defaults.Motion?.Copy();_editor=defaults.Editor;OutputFolderBox.Text=defaults.OutputDirectory;
+            _video=defaults.Video with
+            {
+                Fps = defaults.Video.Fps == 24 ? VideoOptions.DefaultFps : defaults.Video.Fps,
+                Output = OutputKind.Browser
+            };
+            _defaultPlayback=defaults.Playback with{};_defaultEffect=defaults.Effect;_defaultClipDuration=defaults.ClipDuration;_defaultLoop=defaults.Loop;_defaultLoopPeriod=defaults.LoopPeriod;_defaultMotion=defaults.Motion?.Copy();_editor=defaults.Editor;OutputFolderBox.Text=defaults.OutputDirectory;
         }catch(Exception ex){_video=new();_defaultPlayback=PlaybackSections.NewDefault();_defaultEffect=new();_defaultClipDuration=1;OutputFolderBox.Text="";Notify("기본값을 읽지 못해 초기값을 사용합니다: "+ex.Message);}
     }
     private void SaveDefaults(object sender,RoutedEventArgs e)

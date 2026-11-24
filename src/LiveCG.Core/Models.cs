@@ -118,9 +118,10 @@ public record EffectClip
 
 public record VideoOptions
 {
+    public const int DefaultFps = 30;
     public OutputKind Output { get; set; }=OutputKind.Browser;
     public double Duration { get; set; } = 1;
-    public int Fps { get; set; } = 30;
+    public int Fps { get; set; } = DefaultFps;
     public int Crf { get; set; } = 18;
     public double EndHold { get; set; } = 1;
     [JsonIgnore] public int FrameCount => Math.Max(1, (int)Math.Ceiling(Duration * Fps - .00000001));

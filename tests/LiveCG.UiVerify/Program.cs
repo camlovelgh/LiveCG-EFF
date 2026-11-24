@@ -125,8 +125,14 @@ internal static class Program
         }
         if(args.Contains("--project-sources"))
         {
-            var projectWindow=new MainWindow();
             var folderPath=Directory.CreateDirectory(Path.Combine(folder,Guid.NewGuid().ToString("N"))).FullName;
+            Environment.SetEnvironmentVariable("LIVECG_DATA_DIR", Path.Combine(folderPath, "settings"));
+            DocumentStore.Save(DocumentStore.DefaultsPath, new AppDefaults { Video = new() { Fps = 24 } });
+            var projectWindow=new MainWindow();
+            Call(projectWindow,"Seek",1d,false);
+            Check(Control<ComboBox>(projectWindow,"FpsBox").Text=="30" &&
+                Control<TextBlock>(projectWindow,"TimeText").Text.StartsWith("30프레임 / "),
+                "new timeline uses 30 fps even with a saved 24 fps default");
             var source=Path.Combine(folderPath,"source.png");
             var replacement=Path.Combine(folderPath,"replacement.png");
             using var bitmap=new SKBitmap(80,60);
@@ -148,6 +154,11 @@ internal static class Program
             timeline.SetSelection([clip.Id],clip);
             Check(projectWindow.HandleEditorKey(System.Windows.Input.Key.Right,System.Windows.Input.ModifierKeys.None,timeline)&&Math.Abs(clip.Start-31d/30)<1e-8,"right arrow moves the selected clip one frame");
             Check(projectWindow.HandleEditorKey(System.Windows.Input.Key.Left,System.Windows.Input.ModifierKeys.None,timeline)&&Math.Abs(clip.Start-1)<1e-8,"left arrow returns the selected clip one frame");
+            projectWindow.ApplyDocument(new(){Jobs=[job],Video=new(){Fps=24}});
+            Call(projectWindow,"Seek",1d,false);
+            Check(Control<ComboBox>(projectWindow,"FpsBox").Text=="24" &&
+                Control<TextBlock>(projectWindow,"TimeText").Text.StartsWith("24프레임 / "),
+                "existing 24 fps project uses its saved frame rate");
             Console.WriteLine($"RESULT {checks-failures.Count}/{checks} passed");
             return failures.Count==0?0:1;
         }
