@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "71fc783e-159b-4aad-87dc-c8b1ef4a30f4",
+  "Name": "잔상 트레일",
+  "Category": "등장 효과",
+  "Description": "옅은 잔상이 뒤따르며 이동하듯 선명해집니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 1.2, "Options": { "Kind": "EchoTrail", "Strength": "Strong", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

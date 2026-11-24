@@ -1,0 +1,45 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf09",
+  "Name": "매달린 팻말 흔들기",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "선택 영역의 기준점을 위쪽에 두고 흔들림이 차츰 잦아드는 모션입니다. 기준점은 위쪽 중앙에 설정됩니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 1.4,
+      "Options": { "Kind": "UserMotion", "Strength": "Medium", "Speed": 1 },
+      "Enabled": true,
+      "Loop": true,
+      "LoopPeriod": 1.4,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 42,
+        "Tracks": [
+          {
+            "Property": "AnchorY",
+            "Keys": [
+              { "Frame": 0, "Value": 0, "Easing": "EaseInOut" },
+              { "Frame": 42, "Value": 0, "Easing": "EaseInOut" }
+            ]
+          },
+          {
+            "Property": "Rotation",
+            "Keys": [
+              { "Frame": 0, "Value": 0, "Easing": "EaseInOut" },
+              { "Frame": 5, "Value": 14, "Easing": "EaseInOut" },
+              { "Frame": 11, "Value": -12, "Easing": "EaseInOut" },
+              { "Frame": 18, "Value": 9, "Easing": "EaseInOut" },
+              { "Frame": 25, "Value": -6, "Easing": "EaseInOut" },
+              { "Frame": 33, "Value": 3, "Easing": "EaseInOut" },
+              { "Frame": 42, "Value": 0, "Easing": "EaseInOut" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

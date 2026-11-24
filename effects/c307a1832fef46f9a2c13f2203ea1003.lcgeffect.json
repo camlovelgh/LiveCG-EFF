@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "c307a183-2fef-46f9-a2c1-3f2203ea1003",
+  "Name": "블록 타일 조립",
+  "Category": "등장 효과",
+  "Description": "배너 이미지가 흩어진 블록 타일에서 격자 위치로 모이며 조립됩니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 1.2, "Options": { "Kind": "TileAssemble", "Strength": "Medium", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

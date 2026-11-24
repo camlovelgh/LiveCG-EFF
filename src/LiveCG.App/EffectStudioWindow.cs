@@ -89,7 +89,7 @@ public sealed class EffectStudioWindow:Window
         _motionClip=Asset.Clips.FirstOrDefault(c=>c.Options.Kind==EffectKind.UserMotion&&c.Motion is not null)!;
         if(_motionClip is null){var length=Math.Max(1,Asset.Duration);_motionClip=new(){Duration=length,Options=new(){Kind=EffectKind.UserMotion},Motion=new(){LengthFrames=(int)Math.Ceiling(length*30)}};Asset.Clips.Insert(0,_motionClip);}
     }
-    private EditorState State()=>new(JsonSerializer.Serialize(new EffectAsset{Id=Asset.Id,Name=Asset.Name,Category=Asset.Category,Description=Asset.Description,Favorite=Asset.Favorite,Clips=Asset.Clips}),null,null,_selectedClip?.Id,_time);
+    private EditorState State()=>new(JsonSerializer.Serialize(new EffectAsset{Id=Asset.Id,Name=Asset.Name,Category=Asset.Category,Description=Asset.Description,Favorite=Asset.Favorite,IsNew=Asset.IsNew,Clips=Asset.Clips}),null,null,_selectedClip?.Id,_time);
     private void Record(){if(_loading||_gesture)return;_history.Record(State());}
     private void BeginGesture(){Stop();Record();_beforeGesture=State();_gesture=true;}
     private void EndGesture(bool commit){_gesture=false;if(commit)Record();else if(_beforeGesture is not null)Restore(_beforeGesture);_beforeGesture=null;RefreshAll();}

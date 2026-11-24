@@ -1,0 +1,115 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf05",
+  "Name": "펀치처럼 툭 치기",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "짧게 앞으로 튀어나왔다 원래 위치로 돌아옵니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 0.55,
+      "Options": {
+        "Kind": "UserMotion",
+        "Strength": "Medium",
+        "Speed": 1
+      },
+      "Enabled": true,
+      "Loop": false,
+      "LoopPeriod": 0.55,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 17,
+        "Tracks": [
+          {
+            "Property": "ScaleX",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 3,
+                "Value": 1.2,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 7,
+                "Value": 0.96,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 12,
+                "Value": 1.02,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 17,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              }
+            ]
+          },
+          {
+            "Property": "ScaleY",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 3,
+                "Value": 1.13,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 7,
+                "Value": 0.94,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 12,
+                "Value": 1.02,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 17,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              }
+            ]
+          },
+          {
+            "Property": "X",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 0,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 3,
+                "Value": 0.045,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 7,
+                "Value": -0.012,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 17,
+                "Value": 0,
+                "Easing": "EaseInOut"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

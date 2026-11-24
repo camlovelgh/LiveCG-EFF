@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         };
         Choices(FpsBox,["24","30","60"]);foreach(var quality in Qualities)QualityBox.Items.Add(quality);
         Choices(ShapeBox,["사각형","원 / 타원","둥근 사각형","자유손","포인트 펜"]);Choices(ExportScopeBox,["전체 파일","선택 파일","현재 파일"]);ExportScopeBox.SelectedIndex=0;
+        Choices(EffectCategoryBox,["전체 효과","NEW 효과","등장 효과","움직임 효과","장식 효과"]);EffectCategoryBox.SelectedIndex=0;
         Choices(LoopPeriodBox,["0.25","0.5","1","1.5","2","3","5"]);
         Choices(EndHoldBox,["0","0.5","1","2","3"]);Choices(ClipDurationBox,["0.5","0.8","1","1.5","2","3","5"]);
         Choices(EffectSpeedBox,["0.25","0.5","1","1.5","2","4"]);Choices(StrengthBox,ProductInfo.Strengths.Select(ProductInfo.StrengthName).ToArray());
@@ -51,6 +52,7 @@ public partial class MainWindow : Window
             var thumbnail=new EffectThumbnail(kind);thumbnail.MouseLeftButtonDown+=(_,_)=>SelectEffect(kind);
             _thumbnails.Add(thumbnail);EffectsGrid.Children.Add(thumbnail);
         }
+        BuiltInEffectsTab.Header=$"① 효과 · {_thumbnails.Count}종";ApplyEffectFilters();OutputPanelChanged(this,new RoutedEventArgs());
         Preview.RegionSelected+=region=>SelectRegion(region);
         Preview.RegionEdited+=()=>{MarkEdited();RefreshRegionList();RefreshTimeline();UpdateSelectionLabel();};
         Preview.GestureStarted+=BeginGesture;Preview.GestureEnded+=EndGesture;
@@ -81,7 +83,11 @@ public partial class MainWindow : Window
     }
     private void Error(Exception ex){Notify(ex.Message);MessageBox.Show(this,ex.Message,"LiveCG-EFF · 확인",MessageBoxButton.OK,MessageBoxImage.Warning);}
     private void SetBusy(bool busy){_busy=busy;TimelinePanel.IsEnabled=!busy;FileList.IsEnabled=!busy;ExportButton.IsEnabled=!busy;RetryButton.IsEnabled=!busy;CancelButton.IsEnabled=busy;OutputKindBox.IsEnabled=!busy;OutputFolderBox.IsEnabled=!busy;ExportScopeBox.IsEnabled=!busy;FpsBox.IsEnabled=!busy;QualityBox.IsEnabled=!busy;EndHoldBox.IsEnabled=!busy;if(MouseProperties.TryGetValue("EndHoldBox",out var mouse))mouse.IsEnabled=!busy;SetWorkspaceBusy(busy);RefreshOutputSettings();UpdateHistoryButtons();}
-    private void RefreshFiles()=>CountText.Text=$"{_jobs.Count}개 이미지 · 직접 지정 / 파일별 진행 바";
+    private void RefreshFiles()
+    {
+        CountText.Text=_jobs.Count==0?"이미지를 추가해 시작하세요":$"{_jobs.Count}개 이미지 · 직접 지정 / 파일별 진행 바";
+        StartGuidePanel.Visibility=_current is null?Visibility.Visible:Visibility.Collapsed;
+    }
     private List<ImageJob> SelectedJobs()=>FileList.SelectedItems.Cast<ImageJob>().ToList();
     private void QueueEdit(Action action)
     {
@@ -137,7 +143,7 @@ public partial class MainWindow : Window
     private void DisplayJob(ImageJob? job)
     {
         if(_clip is not null)CommitClip(false);CommitRegion(false);CommitMask(false);ClearMaskSelection();StopPlayback();
-        _loading=true;_current=job;_region=null;_clip=null;_time=0;
+        _loading=true;_current=job;_region=null;_clip=null;_time=0;StartGuidePanel.Visibility=job is null?Visibility.Visible:Visibility.Collapsed;
         try{Preview.SetJob(job);}catch(Exception ex){Error(ex);}
         Preview.ShowEffects=false;EffectsPreviewCheck.IsChecked=false;RegionList.ItemsSource=job?.Regions;
         TimelineEditor.SetJob(job,_video);_loading=false;SelectRegion(LayerGraph.Rows(job?.Regions??[]).FirstOrDefault()?.Region);RefreshRegionList();
@@ -241,8 +247,8 @@ public partial class MainWindow : Window
     {
         if(kind==EffectKind.TravelRoute){OpenTravelRoute(this,new RoutedEventArgs());return;}
         if(_busy||!CommitClip(true))return;
-        if(_clip is not null)_clip.Options=_clip.Options with {Kind=kind};
-        else _defaultEffect=_defaultEffect with {Kind=kind};
+        if(_clip is not null){_clip.Options=_clip.Options with {Kind=kind};if(kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)_clip.Loop=false;else if(kind is EffectKind.PopReturn or EffectKind.Squash or EffectKind.Blink or EffectKind.Wave){_clip.Loop=true;_clip.LoopPeriod=kind==EffectKind.Blink?_clip.Duration:kind==EffectKind.Wave ? .9 : Math.Max(.016,Math.Min(_clip.Duration/2,.5));}}
+        else{_defaultEffect=_defaultEffect with {Kind=kind};if(kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)_defaultLoop=false;else if(kind is EffectKind.PopReturn or EffectKind.Squash or EffectKind.Blink or EffectKind.Wave){_defaultLoop=true;_defaultLoopPeriod=kind==EffectKind.Blink?_defaultClipDuration:kind==EffectKind.Wave ? .9 : Math.Max(.016,Math.Min(_defaultClipDuration/2,.5));}}
         if(_region is not null&&_clip is null)AddNewClip(false);
         else{MarkEdited();LoadClipFields();RefreshTimeline();if(_clip is not null)Seek(_clip.Start+_clip.Duration*.45,true);}
     }
@@ -309,7 +315,7 @@ public partial class MainWindow : Window
     }
     private void ShowVideo()
     {
-        var previous=_loading;_loading=true;FpsBox.Text=_video.Fps.ToString();ShowQuality();EndHoldBox.Text=F(_video.EndHold);OutputKindBox.SelectedIndex=_video.Output switch{OutputKind.Browser=>0,OutputKind.Webm=>1,_=>2};ExportButton.Content="출력 시작";_loading=previous;RefreshTimeline();
+        var previous=_loading;_loading=true;FpsBox.Text=_video.Fps.ToString();ShowQuality();EndHoldBox.Text=F(_video.EndHold);OutputKindBox.SelectedIndex=_video.Output switch{OutputKind.Browser=>0,OutputKind.Webm=>1,_=>2};_loading=previous;OutputPanelChanged(this,new RoutedEventArgs());RefreshTimeline();
     }
     private bool CommitVideo(bool report)
     {
@@ -444,7 +450,12 @@ public partial class MainWindow : Window
     {if(_busy)return;var dialog=new OpenFolderDialog{Title="출력 폴더 · WebM / 신규 OBS HTML"};if(dialog.ShowDialog(this)==true){OutputFolderBox.Text=dialog.FolderName;_dirty=true;}}
     private void OutputFolderChanged(object sender,TextChangedEventArgs e){if(!_loading)_dirty=true;}
 
-    private async void ExportFiles(object sender,RoutedEventArgs e){if(!OutputExpander.IsExpanded){OutputExpander.IsExpanded=true;return;}await ExportAsync(ExportTargets());}
+    private async void ExportFiles(object sender,RoutedEventArgs e)
+    {
+        if(_jobs.Count==0){Notify("이미지를 먼저 불러오세요.");return;}
+        if(!OutputExpander.IsExpanded){ShowFinalOutput(sender,e);Notify("출력 설정을 확인한 뒤 ‘출력 시작’을 다시 누르세요.");return;}
+        await ExportAsync(ExportTargets());
+    }
     private async void RetryFailed(object sender,RoutedEventArgs e)=>await ExportAsync(_jobs.Where(j=>j.Status=="실패").ToList());
     private async Task ExportAsync(List<ImageJob> jobs)
     {

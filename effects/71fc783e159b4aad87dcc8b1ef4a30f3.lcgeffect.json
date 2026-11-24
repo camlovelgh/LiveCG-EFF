@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "71fc783e-159b-4aad-87dc-c8b1ef4a30f3",
+  "Name": "초점 맞춤",
+  "Category": "등장 효과",
+  "Description": "흐릿한 배너가 점차 또렷하게 초점을 맞춥니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 1.2, "Options": { "Kind": "FocusPull", "Strength": "Strong", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

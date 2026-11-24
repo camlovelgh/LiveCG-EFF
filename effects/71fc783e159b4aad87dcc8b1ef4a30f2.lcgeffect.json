@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "71fc783e-159b-4aad-87dc-c8b1ef4a30f2",
+  "Name": "잉크 번짐",
+  "Category": "등장 효과",
+  "Description": "중심에서 불규칙한 잉크 가장자리가 퍼지며 이미지가 드러납니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 1.2, "Options": { "Kind": "InkSpread", "Strength": "Strong", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

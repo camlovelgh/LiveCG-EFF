@@ -11,7 +11,8 @@ public class EffectAsset
     public string Category { get; set; }="내 효과";
     public string Description { get; set; }="";
     public bool Favorite { get; set; }
-    [JsonIgnore] public string DisplayName=>(Favorite?"★ ":"")+Name;
+    public bool IsNew { get; set; }
+    [JsonIgnore] public string DisplayName=>(IsNew?"NEW · ":"")+(Favorite?"★ ":"")+Name;
     public string ThumbnailPng { get; set; }="";
     public List<EffectClip> Clips { get; set; }=[];
     public double Duration=>Clips.Select(c=>c.End).DefaultIfEmpty(0).Max();
@@ -21,8 +22,8 @@ public class EffectAsset
         if(ThumbnailPng.Length>0)try{using var codec=SKCodec.Create(new SKMemoryStream(Convert.FromBase64String(ThumbnailPng)));if(codec is null||codec.Info.Width>1024||codec.Info.Height>1024)throw new InvalidDataException("에셋 썸네일을 확인하세요.");}catch(FormatException ex){throw new InvalidDataException("에셋 썸네일 데이터가 손상됐습니다.",ex);}
         foreach(var clip in Clips)clip.Validate();
     }
-    public EffectAsset Copy(bool newId=false)=>new(){Id=newId?Guid.NewGuid():Id,Name=Name,Category=Category,Description=Description,Favorite=Favorite,ThumbnailPng=ThumbnailPng,Clips=Clips.Select(c=>c.Copy()).ToList()};
-    public static EffectAsset NewMotion()=>new(){Name="새 키프레임 효과",Clips=[new(){Duration=2,Options=new(){Kind=EffectKind.UserMotion},Motion=new()}]};
+    public EffectAsset Copy(bool newId=false)=>new(){Id=newId?Guid.NewGuid():Id,Name=Name,Category=Category,Description=Description,Favorite=Favorite,IsNew=IsNew,ThumbnailPng=ThumbnailPng,Clips=Clips.Select(c=>c.Copy()).ToList()};
+    public static EffectAsset NewMotion()=>new(){Name="새 키프레임 효과",IsNew=true,Clips=[new(){Duration=2,Options=new(){Kind=EffectKind.UserMotion},Motion=new()}]};
 }
 public static class AssetStore
 {
@@ -30,13 +31,25 @@ public static class AssetStore
     public static string PathFor(Guid id)=>Path.Combine(DirectoryPath,id.ToString("N")+".lcgeffect.json");
     public static IReadOnlyList<EffectAsset> List(out List<string> errors)
     {
-        errors=[];var list=new List<EffectAsset>();if(!Directory.Exists(DirectoryPath))return list;
+        errors=[];SeedBundled(errors);var list=new List<EffectAsset>();if(!Directory.Exists(DirectoryPath))return list;
         foreach(var path in Directory.EnumerateFiles(DirectoryPath,"*.lcgeffect.json"))
             try{list.Add(DocumentStore.Load<EffectAsset>(path));}catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add(Path.GetFileName(path)+": "+ex.Message);}
         return list.OrderByDescending(a=>a.Favorite).ThenBy(a=>a.Name).ToList();
     }
+    private static void SeedBundled(List<string> errors)
+    {
+        var bundled=Path.Combine(AppContext.BaseDirectory,"effects");if(!Directory.Exists(bundled))return;
+        try{Directory.CreateDirectory(DirectoryPath);}catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add("효과 폴더: "+ex.Message);return;}
+        foreach(var source in Directory.EnumerateFiles(bundled,"*.lcgeffect.json"))
+            try
+            {
+                var asset=DocumentStore.Load<EffectAsset>(source);var target=PathFor(asset.Id);
+                if(!File.Exists(target))File.Copy(source,target);
+            }
+            catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add(Path.GetFileName(source)+": "+ex.Message);}
+    }
     public static void Save(EffectAsset asset){asset.Validate();DocumentStore.Save(PathFor(asset.Id),asset);}
-    public static EffectAsset Import(string path){var asset=DocumentStore.Load<EffectAsset>(path).Copy(true);Save(asset);return asset;}
+    public static EffectAsset Import(string path){var asset=DocumentStore.Load<EffectAsset>(path).Copy(true);asset.IsNew=true;Save(asset);return asset;}
     public static void Remove(Guid id)
     {
         var path=PathFor(id);if(!File.Exists(path))return;var trash=Path.Combine(DirectoryPath,"deleted");Directory.CreateDirectory(trash);

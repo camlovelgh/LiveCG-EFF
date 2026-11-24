@@ -8,6 +8,12 @@ namespace LiveCG.App;
 public partial class MainWindow
 {
     private bool _outputSync,_singleCycle;
+    private void OutputPanelChanged(object sender,RoutedEventArgs e)
+    {
+        if(ExportButton is null||OutputExpander is null)return;
+        ExportButton.Content=OutputExpander.IsExpanded?"출력 시작":"출력 설정 열기";
+        ExportButton.ToolTip=OutputExpander.IsExpanded?"설정을 확인한 뒤 파일 출력을 시작합니다.":"출력 형식과 저장 위치를 먼저 설정합니다.";
+    }
     private static string RestName(LoopRestMode mode)=>mode switch{LoopRestMode.Hold=>"마지막 모습 유지",LoopRestMode.Transparent=>"전체 투명",_=>"원본 유지 · 효과만 쉬기"};
     private void RefreshOutputSettings()
     {

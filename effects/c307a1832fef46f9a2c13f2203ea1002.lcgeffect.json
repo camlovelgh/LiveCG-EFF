@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "c307a183-2fef-46f9-a2c1-3f2203ea1002",
+  "Name": "양쪽에서 문구 합류",
+  "Category": "등장 효과",
+  "Description": "선택한 배너의 좌우 절반이 양쪽 바깥에서 중앙으로 모여 완성됩니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 0.9, "Options": { "Kind": "SplitConverge", "Strength": "Medium", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

@@ -25,7 +25,7 @@ public partial class MainWindow
     private void OutputKindChanged(object sender,SelectionChangedEventArgs e)
     {
         if(_loading||_busy||OutputKindBox.SelectedIndex<0)return;
-        _video.Output=OutputKindBox.SelectedIndex switch{0=>OutputKind.Browser,1=>OutputKind.Webm,_=>OutputKind.Both};ExportButton.Content="출력 시작";MarkEdited(true);RefreshTimeline();
+        _video.Output=OutputKindBox.SelectedIndex switch{0=>OutputKind.Browser,1=>OutputKind.Webm,_=>OutputKind.Both};MarkEdited(true);RefreshTimeline();
     }
     private bool _playbackViewSync;
     private void BroadcastModeChanged(object sender,RoutedEventArgs e){if(!_loading)StopPlayback();if(_playbackViewSync)return;_playbackViewSync=true;PlaybackViewBox.SelectedIndex=BroadcastPreviewCheck.IsChecked==true?0:1;LoopPreviewCheck.Visibility=BroadcastPreviewCheck.IsChecked==true?Visibility.Collapsed:Visibility.Visible;_playbackViewSync=false;}

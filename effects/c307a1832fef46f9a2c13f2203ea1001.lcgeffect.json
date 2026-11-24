@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "Id": "c307a183-2fef-46f9-a2c1-3f2203ea1001",
+  "Name": "글자별 회전 상승",
+  "Category": "등장 효과",
+  "Description": "텍스트가 포함된 영역을 글자 폭으로 나누어 아래에서 회전하며 순서대로 올라옵니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [{ "Start": 0, "Duration": 1.1, "Options": { "Kind": "CharacterRotateRise", "Strength": "Medium", "Speed": 1 }, "Enabled": true, "Loop": false, "LoopPeriod": 1 }]
+}

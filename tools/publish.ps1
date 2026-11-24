@@ -1,11 +1,16 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'bootstrap.ps1')
 $taskVersion = ([xml](Get-Content -LiteralPath (Join-Path $taskRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
-$taskPublish = Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion"
+$taskBuildLabel = if ([string]::IsNullOrWhiteSpace($env:LIVECG_BUILD_LABEL)) { 'dev1' } else { $env:LIVECG_BUILD_LABEL }
+if ($taskBuildLabel -notmatch '^[A-Za-z0-9-]+$') { throw 'LIVECG_BUILD_LABEL may contain only letters, numbers, and hyphens.' }
+$taskPublish = Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-$taskBuildLabel-win-x64"
 $taskAppFolder = Join-Path $taskPublish 'app'
 & (Join-Path $PSScriptRoot 'build-icon.ps1')
-& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true -o $taskAppFolder --disable-build-servers -m:1 -v minimal
+& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true --disable-build-servers -m:1 -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
+$taskPublishSource = Join-Path $taskRoot 'src\LiveCG.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'
+New-Item -ItemType Directory -Path $taskAppFolder -Force | Out-Null
+Copy-Item -Path (Join-Path $taskPublishSource '*') -Destination $taskAppFolder -Recurse -Force
 $taskFfmpeg = Get-ChildItem -LiteralPath (Join-Path $taskRoot '.tools\ffmpeg') -Filter ffmpeg.exe -Recurse | Select-Object -First 1
 $taskVendor = Split-Path (Split-Path $taskFfmpeg.FullName -Parent) -Parent
 $taskDestination = Join-Path $taskAppFolder 'tools\ffmpeg'
@@ -48,5 +53,5 @@ app 폴더: 실행에 필요한 프로그램과 런타임입니다. 이동하거
 licenses 폴더: 외부 라이선스 원문입니다.
 다른 PC로 옮길 때는 이 폴더 전체를 복사하세요.
 "@ | Set-Content -LiteralPath (Join-Path $taskPublish '먼저 읽어주세요.txt') -Encoding utf8
-Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-win-x64.zip") -Force
+Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-$taskBuildLabel-win-x64.zip") -Force
 Write-Output "Ready: $(Join-Path $taskPublish 'LiveCG-EFF.exe')"

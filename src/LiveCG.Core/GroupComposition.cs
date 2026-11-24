@@ -68,11 +68,16 @@ public sealed partial class EffectScene
             if(effects&&root.Role==RegionRole.Group)foreach(var child in regions.Where(r=>r.ParentId==root.Id&&r.Enabled).Reverse())ApplyArea(frame,child,rect,time);
             var roll=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.DigitRoll&&time>=c.Start&&time<c.End):null;
             var bounce=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Bounce&&time>=c.Start&&time<c.End):null;
+            var wave=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Wave&&time>=c.Start&&time<c.End):null;
+            var fragments=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Fragments&&time>=c.Start&&time<c.End):null;
+            var tear=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.TearIn&&time>=c.Start&&time<c.End):null;
+            var typewriter=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Typewriter&&time>=c.Start&&time<c.End):null;
+            var special=effects?clips.LastOrDefault(c=>(c.Options.Kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)&&time>=c.Start&&time<c.End):null;
             var numeric=(roll is not null||bounce is not null)&&GetLayer(root).Digits.Count>0;
             if(numeric){using var c=new SKCanvas(frame);c.Clear(SKColors.Transparent);using var p=new SKPaint{Color=SKColors.White};DrawDigits(c,GetLayer(root),roll,bounce,time,p);}
             // Input glyphs already carry the extraction alpha. A moving/new glyph must not be cut by the old glyph silhouette.
             using var coverage=ShapeCoverage(root,frame.Width,frame.Height,!numeric);using var masks=_maskRenderer.Render(root.Masks,frame.Width,frame.Height,Width,Height,rect,time);Multiply(coverage,masks);Multiply(frame,coverage);
-            canvas.Save();canvas.Translate(rect.Left,rect.Top);Transform(canvas,SKRect.Create(frame.Width,frame.Height),state);ClipCrop(canvas,SKRect.Create(frame.Width,frame.Height),state);using var paint=new SKPaint{Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255)),IsAntialias=true};using(var image=SKImage.FromBitmap(frame))canvas.DrawImage(image,0,0,Sampling,paint);
+            canvas.Save();canvas.Translate(rect.Left,rect.Top);Transform(canvas,SKRect.Create(frame.Width,frame.Height),state);ClipCrop(canvas,SKRect.Create(frame.Width,frame.Height),state);using var paint=new SKPaint{Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255)),IsAntialias=true};using(var image=SKImage.FromBitmap(frame)){if(typewriter is not null&&!numeric)EffectMotionRenderer.DrawTypewriter(canvas,frame,image,(float)ClipTiming.Progress(typewriter,time),paint);else if(wave is not null&&!numeric)EffectMotionRenderer.DrawWave(canvas,image,frame.Width,frame.Height,(float)ClipTiming.Progress(wave,time),(float)wave.Options.Power,(float)wave.Options.Speed,paint);else if(fragments is not null&&!numeric)EffectMotionRenderer.DrawFragments(canvas,image,frame.Width,frame.Height,(float)ClipTiming.Progress(fragments,time),(float)fragments.Options.Power,paint);else if(tear is not null&&!numeric)EffectMotionRenderer.DrawTearReveal(canvas,image,frame.Width,frame.Height,(float)ClipTiming.Progress(tear,time),(float)tear.Options.Power,paint);else if(special is not null&&!numeric)EffectMotionRenderer.DrawEntrance(canvas,image,frame.Width,frame.Height,special,(float)ClipTiming.Progress(special,time),(float)special.Options.Power,paint);else canvas.DrawImage(image,0,0,Sampling,paint);}
             if(effects)
             {
                 if(root.Masks.Any(m=>m.Enabled))canvas.SaveLayer();
@@ -100,7 +105,10 @@ public sealed partial class EffectScene
             else using(var c=new SKCanvas(effect))
             {
                 var background=area.Background switch{BackgroundMode.Transparent=>SKColors.Transparent,BackgroundMode.Solid=>SKColor.Parse(area.BackgroundColor),_=>GuessBackground(ObjectExtractor.PixelRect(area.Bounds,Width,Height))};
-                c.Clear(background);Transform(c,bounds,state);ClipCrop(c,bounds,state);c.DrawImage(original,0,0,Sampling);
+                c.Clear(background);Transform(c,bounds,state);ClipCrop(c,bounds,state);
+                var special=clips.LastOrDefault(x=>(x.Options.Kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)&&time>=x.Start&&time<x.End);
+                if(special is not null){var layer=GetLayer(area);using var paint=new SKPaint{Color=SKColors.White,IsAntialias=true};EffectMotionRenderer.DrawEntrance(c,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,special,(float)ClipTiming.Progress(special,time),(float)special.Options.Power,paint,bounds.Left,bounds.Top);}
+                else c.DrawImage(original,0,0,Sampling);
             }
             if(state.Alpha<1&&!numeric)
             {
@@ -135,8 +143,14 @@ public sealed partial class EffectScene
         {
             if(numeric || !Identity(state)) DrawReplacement(c,layer,bounds.Left,bounds.Top,numeric);
             c.Save();Transform(c,bounds,state);ClipCrop(c,bounds,state);using var paint=new SKPaint{Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255))};
-            var roll=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.DigitRoll&&time>=x.Start&&time<x.End);var bounce=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Bounce&&time>=x.Start&&time<x.End);
-            if((roll is not null||bounce is not null)&&layer.Digits.Count>0){c.Save();c.Translate(bounds.Left,bounds.Top);DrawDigits(c,layer,roll,bounce,time,paint);c.Restore();}else if(!Identity(state)) c.DrawImage(layer.Image,bounds.Left,bounds.Top,Sampling,paint);c.Translate(bounds.Left,bounds.Top);
+            var roll=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.DigitRoll&&time>=x.Start&&time<x.End);var bounce=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Bounce&&time>=x.Start&&time<x.End);var wave=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Wave&&time>=x.Start&&time<x.End);var fragments=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Fragments&&time>=x.Start&&time<x.End);var tear=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.TearIn&&time>=x.Start&&time<x.End);var typewriter=clips.LastOrDefault(x=>x.Options.Kind==EffectKind.Typewriter&&time>=x.Start&&time<x.End);var special=clips.LastOrDefault(x=>(x.Options.Kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)&&time>=x.Start&&time<x.End);
+            if((roll is not null||bounce is not null)&&layer.Digits.Count>0){c.Save();c.Translate(bounds.Left,bounds.Top);DrawDigits(c,layer,roll,bounce,time,paint);c.Restore();}
+            else if(typewriter is not null)EffectMotionRenderer.DrawTypewriter(c,layer.Bitmap,layer.Image,(float)ClipTiming.Progress(typewriter,time),paint,bounds.Left,bounds.Top);
+            else if(wave is not null)EffectMotionRenderer.DrawWave(c,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(wave,time),(float)wave.Options.Power,(float)wave.Options.Speed,paint,bounds.Left,bounds.Top);
+            else if(fragments is not null)EffectMotionRenderer.DrawFragments(c,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(fragments,time),(float)fragments.Options.Power,paint,bounds.Left,bounds.Top);
+            else if(tear is not null)EffectMotionRenderer.DrawTearReveal(c,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(tear,time),(float)tear.Options.Power,paint,bounds.Left,bounds.Top);
+            else if(special is not null)EffectMotionRenderer.DrawEntrance(c,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,special,(float)ClipTiming.Progress(special,time),(float)special.Options.Power,paint,bounds.Left,bounds.Top);
+            else if(!Identity(state)) c.DrawImage(layer.Image,bounds.Left,bounds.Top,Sampling,paint);c.Translate(bounds.Left,bounds.Top);
             foreach(var clip in clips)if(time>=clip.Start&&(time<clip.End||ProductInfo.HoldsDecoration(clip.Options.Kind)))DrawDecoration(c,bounds.Width,bounds.Height,clip,(float)ClipTiming.Progress(clip,time),state.Alpha,area,layer.Image);c.Restore();
         }
         using var masks=_maskRenderer.Render(area.Masks,frame.Width,frame.Height,Width,Height,parent,time);Multiply(composed,masks);

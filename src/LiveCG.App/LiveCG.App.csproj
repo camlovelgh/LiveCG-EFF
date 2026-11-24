@@ -7,4 +7,5 @@
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\LiveCG.Core\LiveCG.Core.csproj" /><PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\LiveCG.ico" /></ItemGroup>
+  <ItemGroup><Content Include="..\..\effects\*.lcgeffect.json" Link="effects\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
 </Project>

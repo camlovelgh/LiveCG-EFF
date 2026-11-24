@@ -1,0 +1,60 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf06",
+  "Name": "영역 웨이브 모션",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "영역이 위아래로 물결치듯 움직입니다. 글자별 파형은 글자를 각각 수동 영역으로 나눠 적용하세요.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 0.9,
+      "Options": {
+        "Kind": "UserMotion",
+        "Strength": "Medium",
+        "Speed": 1
+      },
+      "Enabled": true,
+      "Loop": true,
+      "LoopPeriod": 0.9,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 27,
+        "Tracks": [
+          {
+            "Property": "Y",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 0,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 7,
+                "Value": -0.04,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 14,
+                "Value": 0.04,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 21,
+                "Value": -0.04,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 27,
+                "Value": 0,
+                "Easing": "EaseInOut"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

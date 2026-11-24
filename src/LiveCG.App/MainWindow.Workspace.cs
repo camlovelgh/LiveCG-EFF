@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using LiveCG.Core;
@@ -35,10 +36,15 @@ public partial class MainWindow
         };
     }
     private void ToggleFocusMode(object sender,RoutedEventArgs e)=>SetFocusMode(!_focusMode);
+    private void TimelineSplitter_DragCompleted(object sender,DragCompletedEventArgs e)
+    {
+        if(_focusMode||_previewWindow is not null)return;
+        _timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);SaveWorkspace();
+    }
     private void SetFocusMode(bool focus)
     {
-        if(!_focusMode&&EditorGrid.RowDefinitions[2].Height.IsAbsolute&&EditorGrid.RowDefinitions[2].Height.Value>0)_timelineHeight=EditorGrid.RowDefinitions[2].Height.Value;
-        _focusMode=focus;TimelinePanel.Visibility=focus?Visibility.Collapsed:Visibility.Visible;TimelineSplitter.Visibility=focus?Visibility.Collapsed:Visibility.Visible;
+        if(!_focusMode&&EditorGrid.RowDefinitions[2].ActualHeight>0)_timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
+        _focusMode=focus;TimelinePanel.Visibility=focus?Visibility.Collapsed:Visibility.Visible;TimelineSplitter.Visibility=focus||_previewWindow is not null?Visibility.Collapsed:Visibility.Visible;
         EditorGrid.RowDefinitions[2].MinHeight=focus?0:170;EditorGrid.RowDefinitions[2].Height=focus?new GridLength(0):new GridLength(_previewWindow is null?_timelineHeight:1,_previewWindow is null?GridUnitType.Pixel:GridUnitType.Star);
         EditorGrid.RowDefinitions[1].Height=new GridLength(focus?0:7);FocusModeButton.Content=focus?"편집 완료 / 타임라인":"편집 크게";
         if(_previewWindow is not null)_previewWindow.Activate();
@@ -77,6 +83,7 @@ public partial class MainWindow
     private void SaveWorkspace()
     {
         if(!_workspaceReady)return;
+        if(!_focusMode&&_previewWindow is null&&EditorGrid.RowDefinitions[2].ActualHeight>0)_timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
         _workspace.Main=WindowPlacement.Capture(this);_workspace.PreviewDetached=_previewWindow is not null;_workspace.EffectsDetached=_effectsWindow is not null;
         _workspace.RightWidth=_rightPanelWidth;_workspace.LayerPanelHeight=_layerPanelHeight;
         if(_previewWindow is not null)_workspace.Preview=WindowPlacement.Capture(_previewWindow);if(_effectsWindow is not null)_workspace.Effects=WindowPlacement.Capture(_effectsWindow);
@@ -138,12 +145,31 @@ public partial class MainWindow
     public void ApplyObjectSelection(NormalizedRect bounds,ObjectCutout? cutout,SKColor? background=null,double? tolerance=null,SeparationTarget? target=null,string? inkColor=null,TextSeparationSettings? textSettings=null)
     {if(_busy||_region is null)return;cutout?.Validate();if(textSettings is not null)_region.TextSettings=textSettings.Copy();if(target is { } selectedTarget)_region.SeparationTarget=selectedTarget;if(inkColor is not null)_region.TextInkColor=inkColor;if(_region.SeparationTarget==SeparationTarget.Text)_region.Softness=_region.Softness with{Enabled=false};var changedBounds=_region.Bounds!=bounds.Clamp();_region.Bounds=bounds.Clamp();_region.Cutout=cutout;_region.CutoutEnabled=true;_region.ContentOnly=cutout is not null;if(changedBounds)_region.Shape=RegionShape.Rectangle;if(background is { } color){_region.Background=color.Alpha==0?BackgroundMode.Transparent:BackgroundMode.Solid;_region.BackgroundColor=ColorPickerWindow.Hex(color);}if(tolerance is { } value)_region.ContentTolerance=value;var oldLoading=_loading;_loading=true;BackgroundBox.SelectedIndex=(int)_region.Background;BackgroundColorBox.Text=_region.BackgroundColor;_loading=oldLoading;SelectRegion(_region,_clip);MarkEdited();Preview.InvalidateVisual();Notify("정밀 보정 적용 · 자동 분리 중복 없음");}
     private EffectAsset? SelectedAsset=>AssetList.SelectedItem as EffectAsset;
-    private void RefreshAssets(){_assets=AssetStore.List(out var errors);FilterEffects(this,new TextChangedEventArgs(TextBox.TextChangedEvent,UndoAction.None));if(errors.Count>0)Notify("일부 에셋을 읽지 못했습니다: "+errors[0]);}
-    private void FilterEffects(object sender,TextChangedEventArgs e)
+    private void RefreshAssets(){_assets=AssetStore.List(out var errors);FilterAssetSearch(this,new TextChangedEventArgs(TextBox.TextChangedEvent,UndoAction.None));ApplyEffectFilters();if(errors.Count>0)Notify("일부 에셋을 읽지 못했습니다: "+errors[0]);}
+    private void OpenAssetFolder(object sender,RoutedEventArgs e){try{Directory.CreateDirectory(AssetStore.DirectoryPath);Process.Start(new ProcessStartInfo{FileName=AssetStore.DirectoryPath,UseShellExecute=true});}catch(Exception ex){Error(ex);}}
+    private void ReloadAssets(object sender,RoutedEventArgs e){RefreshAssets();Notify("효과 폴더의 .lcgeffect.json 파일을 다시 읽었습니다.");}
+    private void FilterEffects(object sender,TextChangedEventArgs e)=>ApplyEffectFilters();
+    private void EffectCategoryChanged(object sender,SelectionChangedEventArgs e)=>ApplyEffectFilters();
+    private void ApplyEffectFilters()
     {
-        if(EffectSearchBox is null||AssetList is null)return;var query=EffectSearchBox.Text.Trim();
-        foreach(var thumbnail in _thumbnails)thumbnail.Visibility=ProductInfo.EffectName(thumbnail.Kind).Contains(query,StringComparison.OrdinalIgnoreCase)?Visibility.Visible:Visibility.Collapsed;
-        FilterAssetSearch(sender,e);
+        if(EffectSearchBox is null||EffectCategoryBox is null||EffectsGrid is null)return;
+        var query=EffectSearchBox.Text.Trim();var category=EffectCategoryBox.SelectedIndex;var visible=0;
+        foreach(var thumbnail in _thumbnails)
+        {
+            var kind=thumbnail.Kind;var matchesCategory=category switch
+            {
+                1=>ProductInfo.IsNewEffect(kind),
+                2=>ProductInfo.IsEntrance(kind),
+                3=>ProductInfo.NeedsLayer(kind)&&!ProductInfo.IsEntrance(kind),
+                4=>!ProductInfo.NeedsLayer(kind),
+                _=>true
+            };
+            var matchesName=ProductInfo.EffectName(kind).Contains(query,StringComparison.OrdinalIgnoreCase);
+            thumbnail.Visibility=matchesCategory&&matchesName?Visibility.Visible:Visibility.Collapsed;
+            if(thumbnail.Visibility==Visibility.Visible)visible++;
+        }
+        EffectCountText.Text=$"{visible} / {_thumbnails.Count}개";
+        EffectFilterEmpty.Visibility=visible==0?Visibility.Visible:Visibility.Collapsed;
     }
     private void FilterAssetSearch(object sender,TextChangedEventArgs e)
     {if(AssetList is null)return;var query=AssetSearchBox?.Text.Trim()??"";AssetList.ItemsSource=_assets.Where(a=>(a.Name+" "+a.Category).Contains(query,StringComparison.OrdinalIgnoreCase)).ToList();}
@@ -159,7 +185,7 @@ public partial class MainWindow
     private void SaveEffectCombo(object sender,RoutedEventArgs e)
     {
         if(_region is null||_region.Clips.Count==0){Notify("저장할 효과가 있는 영역을 선택하세요.");return;}
-        var clips=_region.Clips.Select(c=>c.Copy()).ToList();var start=clips.Min(c=>c.Start);foreach(var clip in clips)clip.Start-=start;OpenStudio(new(){Name=_region.Name+" 효과",Clips=clips});
+        var clips=_region.Clips.Select(c=>c.Copy()).ToList();var start=clips.Min(c=>c.Start);foreach(var clip in clips)clip.Start-=start;OpenStudio(new(){Name=_region.Name+" 효과",IsNew=true,Clips=clips});
     }
     private void EditAsset(object sender,RoutedEventArgs e){if(SelectedAsset is { } asset)OpenStudio(asset.Copy());}
     private void InsertAsset(object sender,RoutedEventArgs e)
@@ -187,9 +213,9 @@ public partial class MainWindow
         try{var group=_region.Clips.Where(c=>_clip.AssetInstanceId is { } instance?c.AssetInstanceId==instance:c.Id==_clip.Id).ToList();var clips=AssetStore.Instantiate(asset,group.Min(c=>c.Start),_video.Fps);foreach(var c in group)_region.Clips.Remove(c);_region.Clips.AddRange(clips);SelectRegion(_region,clips[0]);MarkEdited();RefreshTimeline();}
         catch(Exception ex){Error(ex);}
     }
-    private void DuplicateAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{var copy=asset.Copy(true);copy.Name+=" 복사";AssetStore.Save(copy);RefreshAssets();}catch(Exception ex){Error(ex);}}
+    private void DuplicateAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{var copy=asset.Copy(true);copy.Name+=" 복사";copy.IsNew=true;AssetStore.Save(copy);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void DeleteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;if(MessageBox.Show(this,"내 효과 ‘"+asset.Name+"’를 보관함에서 삭제할까요?","에셋 삭제",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;try{AssetStore.Remove(asset.Id);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void FavoriteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;asset.Favorite=!asset.Favorite;AssetStore.Save(asset);RefreshAssets();}
     private void ImportAsset(object sender,RoutedEventArgs e){if(_busy)return;var dialog=new OpenFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json;*.json",Multiselect=true};if(dialog.ShowDialog(this)==true)try{foreach(var path in dialog.FileNames)AssetStore.Import(path);RefreshAssets();}catch(Exception ex){Error(ex);}}
-    private void ExportAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;var dialog=new SaveFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json",FileName=string.Concat(asset.Name.Select(c=>Path.GetInvalidFileNameChars().Contains(c)?'_':c))};if(dialog.ShowDialog(this)==true)try{DocumentStore.Save(dialog.FileName,asset);}catch(Exception ex){Error(ex);}}
+    private void ExportAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{Directory.CreateDirectory(AssetStore.DirectoryPath);var dialog=new SaveFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json",InitialDirectory=AssetStore.DirectoryPath,FileName=string.Concat(asset.Name.Select(c=>Path.GetInvalidFileNameChars().Contains(c)?'_':c))};if(dialog.ShowDialog(this)==true){DocumentStore.Save(dialog.FileName,asset);RefreshAssets();}}catch(Exception ex){Error(ex);}}
 }
