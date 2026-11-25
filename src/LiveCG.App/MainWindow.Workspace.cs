@@ -204,9 +204,47 @@ public partial class MainWindow
         NewEffectCount.Text=visible+presets.Count==0?"검색 조건에 맞는 효과가 없습니다.":$"효과 {visible}개 · 프리셋 {presets.Count}개";
     }
     private void InsertBundledPreset(object sender,RoutedEventArgs e)
-    {if(sender is Button { Tag: EffectAsset asset })InsertEffectAsset(asset,true);}
+    {if(sender is Button { Tag: EffectAsset asset })PlaceBundledPreset(asset,false);}
+    private void ReplaceBundledPreset(object sender,RoutedEventArgs e)
+    {if(sender is Button { Tag: EffectAsset asset })PlaceBundledPreset(asset,true);}
     private void EditBundledPreset(object sender,RoutedEventArgs e)
     {if(sender is Button { Tag: EffectAsset asset })OpenStudio(asset.Copy(true));}
+    private void PlaceBundledPreset(EffectAsset asset,bool replace)
+    {
+        if(_busy)return;
+        if(_region is null){Notify("프리셋을 적용할 영역을 선택하세요.");return;}
+        var region=_region;
+        var selected=_clip is { } activeClip && region.Clips.Contains(activeClip)?activeClip:null;
+        if(replace&&selected is null){Notify("교체할 타임라인 클립을 선택하세요.");return;}
+        if(!CommitClip(true))return;
+
+        try
+        {
+            var selectedGroup=selected is null?[]:region.Clips.Where(clip=>selected.AssetInstanceId is { } id
+                ?clip.AssetInstanceId==id:clip.Id==selected.Id).ToList();
+            var previousEnd=selectedGroup.Count>0?selectedGroup.Max(clip=>clip.End):region.Clips.Select(clip=>clip.End).DefaultIfEmpty(0).Max();
+            var start=replace?selectedGroup.Min(clip=>clip.Start):previousEnd;
+            var added=AssetStore.Instantiate(asset,start,_video.Fps,bundled:true);
+            if(added.Count==0){Notify("이 프리셋에는 적용할 효과가 없습니다.");return;}
+            if(region.Clips.Count-(replace?selectedGroup.Count:0)+added.Count>4000)
+                throw new InvalidDataException("영역당 최대 4,000클립입니다.");
+
+            if(replace&&selected!.Section!=ClipSection.Auto)
+                foreach(var clip in added)clip.Section=selected.Section;
+
+            var following=region.Clips.Where(clip=>!selectedGroup.Contains(clip)&&clip.Start>=previousEnd-1e-7).ToList();
+            var shift=following.Count==0?0:Math.Max(0,added.Max(clip=>clip.End)-following.Min(clip=>clip.Start));
+            foreach(var clip in following)
+                if(shift>1e-7)(clip with{Start=clip.Start+shift}).Validate();
+
+            if(replace)region.Clips.RemoveAll(selectedGroup.Contains);
+            foreach(var clip in following)
+                if(shift>1e-7)clip.Start+=shift;
+            region.Clips.AddRange(added);
+            SelectRegion(region,added[0]);MarkEdited();RefreshRegionList();RefreshTimeline();
+        }
+        catch(Exception ex){Error(ex);}
+    }
     private static string? EffectCompatibilityMessage(IEnumerable<EffectRegion> regions)
     {
         var removed=regions.SelectMany(region=>region.Clips).Where(clip=>ProductInfo.IsRetiredEffect(clip.Options.Kind)).ToList();
@@ -233,14 +271,14 @@ public partial class MainWindow
     {
         if(SelectedAsset is { } asset)InsertEffectAsset(asset);
     }
-    private void InsertEffectAsset(EffectAsset asset,bool bundled=false)
+    private void InsertEffectAsset(EffectAsset asset)
     {
         if(_busy||_region is null)return;
         try
         {
             var travel=asset.Clips.Any(c=>c.Route is not null);if(travel&&_current!.Regions.Count>=100)throw new InvalidDataException("영역은 파일당 최대100개입니다.");
             var targetRegion=travel?new EffectRegion{Name=asset.Name,Bounds=_region.Bounds,OverlayOnly=true,Background=BackgroundMode.KeepOriginal}:_region;
-            var clips=AssetStore.Instantiate(asset,_time,_video.Fps,bundled);if(clips.Count==0){Notify("이 에셋에는 삭제된 효과만 있습니다. 내 효과에서 편집해 다시 저장하세요.");return;}var rect=ObjectExtractor.PixelRect(targetRegion.Bounds,_current!.Width,_current.Height);
+            var clips=AssetStore.Instantiate(asset,_time,_video.Fps);if(clips.Count==0){Notify("이 에셋에는 삭제된 효과만 있습니다. 내 효과에서 편집해 다시 저장하세요.");return;}var rect=ObjectExtractor.PixelRect(targetRegion.Bounds,_current!.Width,_current.Height);
             foreach(var clip in clips.Where(c=>c.Route is not null))
             {
                 var route=clip.Route!;var oldDuration=route.Duration;

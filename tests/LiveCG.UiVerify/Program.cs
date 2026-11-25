@@ -208,6 +208,33 @@ internal static class Program
             Check(startGuide.Visibility==Visibility.Collapsed,"the start guide is hidden when an image is open");
             window.ApplyDocument(new());Layout(window);
             Check(startGuide.IsVisible,"the start guide returns when the editor becomes empty");
+
+            var anchorClip=new EffectClip { Start=1,Duration=1,Section=ClipSection.Loop };
+            var nextClip=new EffectClip { Start=2,Duration=1 };
+            var otherClip=new EffectClip { Start=2,Duration=1 };
+            var presetRegion=new EffectRegion { Clips=[anchorClip,nextClip] };
+            var otherRegion=new EffectRegion { Clips=[otherClip] };
+            var presetJob=new ImageJob { SourcePath=path,Width=960,Height=540,Regions=[presetRegion,otherRegion] };
+            window.ApplyDocument(new(){Jobs=[presetJob]});
+            Call(window,"SelectRegion",presetRegion,anchorClip);
+            Call(window,"Seek",0d,false);
+            var combo=Control<ItemsControl>(window,"BundledPresets").Items.OfType<EffectAsset>().First(asset=>asset.Clips.Count>1);
+            Call(window,"InsertBundledPreset",new Button{Tag=combo},new RoutedEventArgs());
+            var inserted=presetRegion.Clips.Where(clip=>clip.AssetId==combo.Id).ToList();
+            Check(Math.Abs(inserted.Min(clip=>clip.Start)-anchorClip.End)<1e-7&&Math.Abs(nextClip.Start-inserted.Max(clip=>clip.End))<1e-7&&otherClip.Start==2,
+                "bundled preset inserts behind the selected effect independently of the playhead and only shifts following clips in that region");
+            Call(window,"UndoEdit",window,new RoutedEventArgs());
+            presetRegion=Field<ObservableCollection<ImageJob>>(window,"_jobs")[0].Regions.First(region=>region.Id==presetRegion.Id);
+            anchorClip=presetRegion.Clips.First(clip=>clip.Id==anchorClip.Id);
+            Check(presetRegion.Clips.Count==2&&presetRegion.Clips.Any(clip=>clip.Id==nextClip.Id&&clip.Start==2),
+                "one undo removes the inserted preset and restores following timing");
+            Call(window,"SelectRegion",presetRegion,anchorClip);
+            var replacement=Control<ItemsControl>(window,"BundledPresets").Items.OfType<EffectAsset>().First(asset=>asset.Duration<=1&&asset.Clips.Count==1);
+            Call(window,"ReplaceBundledPreset",new Button{Tag=replacement},new RoutedEventArgs());
+            Check(presetRegion.Clips.All(clip=>clip.Id!=anchorClip.Id)&&presetRegion.Clips.Any(clip=>clip.AssetId==replacement.Id&&clip.Start==1&&clip.Section==ClipSection.Loop)
+                &&presetRegion.Clips.Any(clip=>clip.Id==nextClip.Id&&clip.Start==2),
+                "preset replacement preserves selected start and explicit phase without moving a later clip when there is room");
+
             window.ApplyDocument(new(){Jobs=[job,secondJob],Video=new(){Output=OutputKind.Webm,Fps=30,EndHold=.5}});Layout(window);
             Check(job.Regions.Count==0,"PNG begins without automatic regions");
             Check(Control<ComboBox>(window,"FpsBox").Text=="30","loaded project keeps its fps over defaults");

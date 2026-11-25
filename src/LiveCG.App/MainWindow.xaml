@@ -215,11 +215,18 @@
      <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
       <UniformGrid x:Name="NewEffectsGrid" Columns="3"/>
       <TextBlock x:Name="BundledPresetTitle" Text="모션 프리셋" Foreground="#9AB7C7" Margin="4,8,4,3"/>
-      <ItemsControl x:Name="BundledPresets"><ItemsControl.ItemTemplate><DataTemplate><DockPanel Margin="2">
-       <Button DockPanel.Dock="Right" Content="삽입" Tag="{Binding}" Click="InsertBundledPreset"/>
-       <Button DockPanel.Dock="Right" Content="편집" Tag="{Binding}" Click="EditBundledPreset"/>
-       <TextBlock Text="{Binding Name}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-      </DockPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      <ItemsControl x:Name="BundledPresets"><ItemsControl.ItemTemplate><DataTemplate>
+       <Border BorderBrush="#263D4C" BorderThickness="0,0,0,1" Padding="4,4,4,5">
+        <StackPanel>
+         <TextBlock Text="{Binding Name}" TextWrapping="Wrap"/>
+         <WrapPanel>
+          <Button Content="편집" Tag="{Binding}" Click="EditBundledPreset" ToolTip="프리셋을 열어 편집합니다."/>
+          <Button Content="클립 교체" Tag="{Binding}" Click="ReplaceBundledPreset" ToolTip="선택한 클립을 같은 시작 위치에서 이 프리셋으로 바꿉니다."/>
+          <Button Content="삽입" Tag="{Binding}" Click="InsertBundledPreset" ToolTip="선택한 효과 바로 뒤에 넣습니다. 선택이 없으면 영역 끝에 넣습니다."/>
+         </WrapPanel>
+        </StackPanel>
+       </Border>
+      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
      </StackPanel></ScrollViewer>
     </DockPanel>
    </TabItem>
