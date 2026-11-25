@@ -24,7 +24,7 @@ internal static class ContextUiChecks
         Call("ToggleSelectedLayer",window,new RoutedEventArgs());Pump();check(!first.Enabled&&ReferenceEquals(C<ListBox>("RegionList").SelectedItem,first),"quick visibility label follows hidden state immediately");Call("ToggleSelectedLayer",window,new RoutedEventArgs());Pump();check(first.Enabled&&ReferenceEquals(C<ListBox>("RegionList").SelectedItem,first),"quick visibility label follows restored state immediately");
         var assetCount=C<ListBox>("AssetList").Items.Count;C<TextBox>("EffectSearchBox").Text="unrelated-no-effect";Pump();check(C<ListBox>("AssetList").Items.Count==assetCount,"library and personal-asset searches have independent state");C<TextBox>("EffectSearchBox").Text="";
         check(C<Expander>("ClipAppearanceSection").Visibility==Visibility.Collapsed,"non-color zoom effect hides irrelevant appearance controls");
-        foreach(var i in new[]{0,1,2,3}){tabs.SelectedIndex=i;Pump();check(C<ComboBox>("AreaContentMode").IsVisible&&C<CheckBox>("AreaSoftEnabled").IsVisible,"quick controls remain accessible on property tab "+i);}
+        for(var i=0;i<tabs.Items.Count;i++){tabs.SelectedIndex=i;Pump();check(C<ComboBox>("AreaContentMode").IsVisible&&C<CheckBox>("AreaSoftEnabled").IsVisible,"quick controls remain accessible on property tab "+i);}
         var mode=C<ComboBox>("AreaContentMode");mode.SelectedIndex=1;Pump();check(first.ContentOnly&&first.CutoutEnabled,"quick content mode enables single-pass background separation");
         window.SoftValues["Width"].EditValue(19);check(first.Softness.Width==19,"quick width changes without opening the clip tab");
         using(var source=SKBitmap.Decode(path))

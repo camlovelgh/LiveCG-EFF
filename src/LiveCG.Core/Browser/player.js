@@ -10,13 +10,15 @@
     const plan = data.plan, fps = data.fps;
     const A = plan.introFrames / fps, B = plan.loopEndFrame / fps, END = plan.endFrame / fps, LOOP = B - A;
     const REST=(plan.restFrames??0)/fps, CYCLE=LOOP+REST;
-    const entrances = new Set(["FadeIn", "RiseIn", "ZoomIn", "ZoomOutIn"]);
-    const needsLayer = k => entrances.has(k) || ["Zoom", "Bounce", "Shake", "Float", "DigitRoll", "UserMotion"].includes(k);
+    const entrances = new Set(["FadeIn", "RiseIn", "ZoomIn", "ZoomOutIn", "WipeRight", "WipeFromRight", "WipeFromTop", "WipeFromBottom", "FallIn", "Typewriter", "Fragments", "TearIn", "CardFlip", "InkSpread", "FocusPull", "EchoTrail", "CenterCurtain", "VenetianShutter", "IrisOpen", "CharacterRotateRise", "SplitConverge", "TileAssemble"]);
+    const revealEntrances = new Set(["CardFlip", "InkSpread", "FocusPull", "EchoTrail", "CenterCurtain", "VenetianShutter", "IrisOpen", "CharacterRotateRise", "SplitConverge", "TileAssemble"]);
+    const needsLayer = k => entrances.has(k) || ["Zoom", "Bounce", "Shake", "Float", "DigitRoll", "UserMotion", "PopReturn", "Squash", "Blink", "Wave"].includes(k);
     const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
     const image = name => images.get(name);
     const power = c => ({VeryWeak:.18,Weak:.55,Medium:1,Strong:1.65,VeryStrong:2.4}[c.options.strength] ?? 1);
-    const holds = k => k === "Highlight" || k === "Underline" || k === "TravelRoute";
-    entrances.add("WipeRight"); entrances.add("FallIn");
+    const holds = k => ["TravelRoute", "StrikeThrough", "PaperCorner"].includes(k);
+    const retired = new Set(["Sparkle", "Highlight", "Underline"]);
+    const newEffects = new Set(data.newEffects ?? []);
     const blank = (key, w, h) => {
         let c = buffers.get(key);
         if (!c) { c = document.createElement("canvas"); buffers.set(key, c); }
@@ -25,7 +27,88 @@
         x.filter = "none"; x.clearRect(0, 0, w, h); return c;
     };
     const copy = (key, source) => { const c = blank(key, source.width, source.height); c.getContext("2d").drawImage(source, 0, 0); return c; };
+    function typewriter(x, source, p) {
+        const count = clamp(Math.round(source.width / Math.max(1, source.height * .62)), 1, 48), visible = clamp(p) * count;
+        const opacity=x.globalAlpha;
+        for (let i = 0; i < count; i++) { const alpha=clamp(visible-i); if(alpha<=0)continue; const left=i*source.width/count,right=(i+1)*source.width/count;x.globalAlpha=opacity*alpha;x.drawImage(source,left,0,right-left,source.height,left-1,0,right-left+2,source.height); }
+        x.globalAlpha=opacity;
+    }
+    function drawEntrance(x, source, kind, p, pow, left = 0, top = 0) {
+        const w=source.width,h=source.height,e=1-(1-clamp(p))**3,alpha=x.globalAlpha;
+        if(kind==="CardFlip"){
+            const scale=Math.max(.015,Math.sin(e*Math.PI*.5));x.save();x.translate(left+w*.5,top);x.scale(scale,1);x.translate(-left-w*.5,-top);x.drawImage(source,left,top,w,h);x.restore();return;
+        }
+        if(kind==="CharacterRotateRise"){
+            const count=clamp(Math.round(w/Math.max(1,h*.62)),1,48),visible=clamp(p)*count;
+            for(let i=0;i<count;i++){const local=clamp(visible-i);if(local<=0)continue;const eased=1-(1-local)**3,l=i*w/count,r=(i+1)*w/count,sw=r-l,offset=(1-eased)*h*.58,angle=(1-eased)*(i%2===0?-78:78);x.save();x.globalAlpha=alpha*eased;x.translate(left+l+sw*.5,top+h*.5+offset);x.rotate(angle*Math.PI/180);x.drawImage(source,l,0,sw,h,-sw*.5,-h*.5,sw,h);x.restore();}return;
+        }
+        if(kind==="SplitConverge"){
+            const eased=1-(1-clamp(p))**3,middle=w*.5,half=w-middle,travel=w*(1-eased);x.save();x.globalAlpha=alpha*eased;x.drawImage(source,0,0,middle,h,left-travel,top,middle,h);x.drawImage(source,middle,0,half,h,left+middle+travel,top,half,h);x.restore();return;
+        }
+        if(kind==="TileAssemble"){
+            const columns=6,rows=4,total=columns*rows;
+            for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){const index=row*columns+column,order=(index*17+5)%total,start=order/total*.48,local=clamp((p-start)/.52);if(local<=0)continue;const eased=1-(1-local)**3,l=column*w/columns,r=(column+1)*w/columns,t=row*h/rows,b=(row+1)*h/rows,tw=r-l,th=b-t,dx=((order*13%11)-5)*w*.045*pow*(1-eased),dy=((order*7%9)-4)*h*.075*pow*(1-eased),rotation=((order%2===0)?-1:1)*(24+(order%4)*5)*(1-eased),sx=Math.max(.025,Math.sin((.08+.92*eased)*Math.PI*.5));x.save();x.globalAlpha=alpha*eased;x.translate(left+l+tw*.5+dx,top+t+th*.5+dy);x.rotate(rotation*Math.PI/180);x.scale(sx,.78+.22*eased);x.drawImage(source,l,t,tw,th,-tw*.5,-th*.5,tw,th);x.restore();}
+            return;
+        }
+        if(kind==="FocusPull"){
+            x.filter=`blur(${Math.max(0,h*.055*pow*(1-e))}px)`;x.drawImage(source,left,top,w,h);x.filter="none";return;
+        }
+        if(kind==="EchoTrail"){
+            const travel=w*.13*pow*(1-e);for(let i=3;i>=1;i--){x.globalAlpha=alpha*e*(.11+i*.055);x.drawImage(source,left-travel*i/3,top,w,h);}x.globalAlpha=alpha*e;x.drawImage(source,left,top,w,h);x.globalAlpha=alpha;return;
+        }
+        x.save();
+        if(kind==="InkSpread"){
+            const radius=Math.hypot(w,h)*.55*(1-(1-clamp(p))**2.2);x.beginPath();for(let i=0;i<48;i++){const a=Math.PI*2*i/48,rough=1+(.035*Math.sin(i*2.17)+.022*Math.sin(i*4.91))*pow,px=left+w*.5+Math.cos(a)*radius*rough,py=top+h*.5+Math.sin(a)*radius*rough;i?x.lineTo(px,py):x.moveTo(px,py);}x.closePath();x.clip();
+        } else if(kind==="CenterCurtain"){
+            const visible=w*e;x.beginPath();x.rect(left+(w-visible)*.5,top,visible,h);x.clip();
+        } else if(kind==="IrisOpen"){
+            x.beginPath();x.arc(left+w*.5,top+h*.5,Math.hypot(w,h)*.56*e,0,Math.PI*2);x.clip();
+        } else if(kind==="VenetianShutter"){
+            const slats=7,band=h/slats;x.beginPath();for(let i=0;i<slats;i++){const local=clamp((p*1.35-i*.075)/.58),open=band*local,y=top+i*band+(band-open)*.5;x.rect(left,y,w,open);}x.clip();
+        }
+        x.drawImage(source,left,top,w,h);x.restore();
+    }
     const multiply = (target, mask) => { const x = target.getContext("2d"); x.save(); x.globalCompositeOperation = "destination-in"; x.drawImage(mask, 0, 0); x.restore(); };
+    const rasterKinds = new Set([...revealEntrances, "Typewriter", "Wave", "Fragments", "TearIn"]);
+    function rasterMotion(clips, time) {
+        return clips.filter(c => time >= c.start && time < c.start + c.duration && rasterKinds.has(c.options.kind)).at(-1);
+    }
+    function drawRasterMotion(x, source, clip, time, left = 0, top = 0) {
+        const {width: w, height: h} = source, k = clip.options.kind, p = progress(clip, time), strength = power(clip);
+        if (k === "Typewriter") {
+            x.save(); x.translate(left, top); typewriter(x, source, p); x.restore();
+        } else if (k === "Wave") {
+            const strip = Math.max(4, Math.floor(w / 80)), amplitude = Math.min(h * .16, Math.max(1, h * .035 * strength));
+            const phase = p * Math.PI * 2 * clip.options.speed;
+            for (let sx = 0; sx < w; sx += strip) {
+                const dw = Math.min(strip, w - sx), y = Math.sin(sx / w * Math.PI * 4 + phase) * amplitude;
+                x.drawImage(source, sx, 0, dw, h, left + sx - 1, top + y, dw + 2, h);
+            }
+        } else if (k === "Fragments") {
+            const opacity = x.globalAlpha;
+            for (let index = 0; index < 48; index++) {
+                const order = (index * 37 + 11) % 48, local = clamp((p - order / 48 * .55) / .45);
+                if (!local) continue;
+                const sw = w / 8, sh = h / 6, sx = index % 8 * sw, sy = Math.floor(index / 8) * sh;
+                const dx = ((order * 17 % 15) - 7) * w * .006 * strength * (1 - local);
+                const dy = ((order * 11 % 13) - 6) * h * .01 * strength * (1 - local);
+                x.globalAlpha = opacity * local;
+                x.drawImage(source, sx, sy, sw, sh, left + sx + dx - 1, top + sy + dy - 1, sw + 2, sh + 2);
+            }
+            x.globalAlpha = opacity;
+        } else if (k === "TearIn") {
+            if (!p) return;
+            const tooth = Math.min(h * .12, Math.max(2, h * .035 * strength));
+            x.save(); x.beginPath(); x.moveTo(left, top);
+            for (let i = 0; i <= 18; i++) {
+                const jitter = i === 0 || i === 18 ? 0 : Math.sin(i * 13.17 + 1.4) * tooth;
+                x.lineTo(left + clamp(p * w + jitter, 0, w), top + h * i / 18);
+            }
+            x.lineTo(left, top + h); x.closePath(); x.clip(); x.drawImage(source, left, top); x.restore();
+        } else {
+            drawEntrance(x, source, k, p, strength, left, top);
+        }
+    }
     function shape(r, b) {
         const p = new Path2D(), { x, y, width: w, height: h } = b;
         if (r.shape === "Ellipse") p.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
@@ -36,7 +119,7 @@
         return p;
     }
     function effective(clips, time) {
-        const list = clips.filter(c => c.enabled).slice().sort((a, b) => a.start - b.start), chosen = new Map();
+        const list = clips.filter(c => c.enabled && !retired.has(c.options.kind)).slice().sort((a, b) => a.start - b.start), chosen = new Map();
         for (const c of list) if (c.sequenceId && (!chosen.has(c.sequenceId) || c.start <= time)) chosen.set(c.sequenceId, c.id);
         return list.filter(c => !c.sequenceId || chosen.get(c.sequenceId) === c.id);
     }
@@ -61,8 +144,18 @@
         }
         return keys.at(-1).value;
     }
+    function bannerPopScale(progress) {
+        const keys=[[0,1],[7,1.12],[15,.98],[23,1.04],[30,1],[36,1]],frame=clamp(progress)*36;
+        for(let i=1;i<keys.length;i++)if(frame<keys[i][0]){const a=keys[i-1],b=keys[i];let t=(frame-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return a[1]+(b[1]-a[1])*t;}
+        return 1;
+    }
+    function bannerSquash(progress) {
+        const x=[[0,1],[5,1.12],[11,.92],[18,1.04],[23,.98],[30,1]],y=[[0,1],[5,.88],[11,1.08],[18,.96],[23,1.02],[30,1]],frame=clamp(progress)*30;
+        const sample=keys=>{for(let i=1;i<keys.length;i++)if(frame<keys[i][0]){const a=keys[i-1],b=keys[i];let t=(frame-a[0])/(b[0]-a[0]);t=t*t*(3-2*t);return a[1]+(b[1]-a[1])*t;}return 1;};
+        return [sample(x),sample(y)];
+    }
     function motion(clips, time, bounds, digitBounce) {
-        const s = { alpha: 1, scale: 1, sx: 1, sy: 1, ax: .5, ay: .5, x: 0, y: 0, angle: 0, top:0,bottom:0,left:0,right:0 };
+        const s = { alpha: 1, scale: 1, sx: 1, sy: 1, ax: .5, ay: .5, x: 0, y: 0, angle: 0, top:0,bottom:0,left:0,right:0,typewriter:false,reveal:false };
         const first = clips.find(c => entrances.has(c.options.kind) || c.options.kind === "UserMotion" && value(c.motion, "Opacity", 0) === 0);
         const user = clips.filter(c => c.options.kind === "UserMotion" && c.motion && time >= c.start).at(-1);
         if (user) {
@@ -77,14 +170,23 @@
             if (time < c.start) continue;
             const p = progress(c, time), k = c.options.kind, pow = power(c), speed = c.options.speed, envelope = Math.sin(Math.PI * p) ** 2;
             if (entrances.has(k)) {
-                const ease = 1 - (1 - p ** (1 / speed)) ** 3; if(k!=="WipeRight")s.alpha *= ease;
+                const ease = 1 - (1 - p ** (1 / speed)) ** 3; if(!["WipeRight","WipeFromRight","WipeFromTop","WipeFromBottom","Typewriter"].includes(k)&&!revealEntrances.has(k))s.alpha *= ease;
+                if(time<c.start+c.duration&&rasterKinds.has(k))s.reveal=true;
                 if (k === "RiseIn") s.y += (1 - ease) * bounds.height * (.65 + .4 * pow);
                 if (k === "FallIn") s.y -= (1 - ease) * bounds.height * (.65 + .4 * pow);
                 if (k === "WipeRight") s.right=Math.max(s.right,1-ease);
+                if (k === "WipeFromRight") s.left=Math.max(s.left,1-ease);
+                if (k === "WipeFromTop") s.bottom=Math.max(s.bottom,1-ease);
+                if (k === "WipeFromBottom") s.top=Math.max(s.top,1-ease);
+                if (k === "Typewriter" && time < c.start + c.duration) s.typewriter=true;
                 if (k === "ZoomIn") s.scale *= .12 + .88 * ease;
                 if (k === "ZoomOutIn") s.scale *= 1 + (1 - ease) * (.4 + .45 * pow);
             } else if (time < c.start + c.duration) {
                 if (k === "Zoom") s.scale *= 1 + .23 * pow * Math.sin(p * Math.PI * speed) ** 2;
+                if (k === "PopReturn") { const pop=1+(bannerPopScale((p*speed)%1)-1)*pow; s.sx*=pop; s.sy*=pop; }
+                if (k === "Squash") { const [sx,sy]=bannerSquash((p*speed)%1); s.sx*=1+(sx-1)*pow; s.sy*=1+(sy-1)*pow; }
+                if (k === "Wave") s.reveal=true;
+                if (k === "Blink") s.alpha*=.12+.88*(.5+.5*Math.cos(p*speed*Math.PI*4));
                 if (k === "Bounce" && !digitBounce) s.y -= Math.abs(Math.sin(p * Math.PI * 3 * speed)) * bounds.height * .32 * pow * envelope;
                 if (k === "Shake") { s.angle += Math.sin(p * Math.PI * 14 * speed) * 8 * pow * envelope; s.x += Math.sin(p * Math.PI * 20 * speed) * bounds.width * .035 * pow * envelope; }
                 if (k === "Float") { s.y -= Math.sin(p * Math.PI * 2 * speed) * bounds.height * .22 * pow * envelope; s.angle += Math.sin(p * Math.PI * 2 * speed) * 2 * pow * envelope; }
@@ -92,7 +194,7 @@
         }
         return s;
     }
-    const identity = s => s.alpha === 1 && s.scale === 1 && s.sx === 1 && s.sy === 1 && s.x === 0 && s.y === 0 && s.angle === 0 && !s.top&&!s.bottom&&!s.left&&!s.right;
+    const identity = s => s.alpha === 1 && s.scale === 1 && s.sx === 1 && s.sy === 1 && s.x === 0 && s.y === 0 && s.angle === 0 && !s.top&&!s.bottom&&!s.left&&!s.right&&!s.typewriter&&!s.reveal;
     function crop(x,b,s){if(s.top||s.bottom||s.left||s.right){x.beginPath();x.rect(b.x+b.width*s.left,b.y+b.height*s.top,Math.max(0,b.width*(1-s.left-s.right)),Math.max(0,b.height*(1-s.top-s.bottom)));x.clip();}}
     function transform(x, b, s) {
         const ax = b.x + b.width * s.ax, ay = b.y + b.height * s.ay;
@@ -148,17 +250,40 @@
         } else if (k === "Glow") {
             x.strokeStyle = tint(c,255,218,88,240/255*amplitude); x.lineWidth = Math.max(3, h * .07 * pow);
             x.filter = `blur(${Math.max(3, h * .15 * pow)}px)`; x.stroke(outline); x.filter = "none"; x.lineWidth = Math.max(2, h * .025); x.stroke(outline);
-        } else if (k === "Highlight") {
-            x.clip(outline, "evenodd"); x.globalCompositeOperation = "multiply"; x.fillStyle = tint(c,255,225,32,Math.min(210,120*pow)/255*opacity);
-            const pth = new Path2D(); pth.roundRect(-w * .02, h * .3, w * 1.04 * (1 - (1 - p) ** 3), h * .65, h * .12); x.fill(pth);
-        } else if(k === "Underline") {
-            x.fillStyle=tint(c,255,225,32,Math.min(210,120*pow)/255*opacity);const pth=new Path2D();pth.roundRect(-w*.03,h*.86,w*1.06*(1-(1-p)**3),Math.max(2,h*.10),h*.05);x.fill(pth);
-        } else if (k === "Sparkle") {
-            x.fillStyle = tint(c,255,247,192,amplitude);
-            for (let i = 0; i < 8; i++) {
-                const sx = w * (i % 4) / 3, sy = i < 4 ? -h * .08 : h * 1.08, size = h * .22 * pow * (.4 + .6 * Math.abs(Math.sin(p * 9 + i))) * edge;
-                const star = new Path2D(); [[0, -1], [.23, -.23], [1, 0], [.23, .23], [0, 1], [-.23, .23], [-1, 0], [-.23, -.23]].forEach((v, j) => j ? star.lineTo(sx + v[0] * size, sy + v[1] * size) : star.moveTo(sx, sy - size)); star.closePath(); x.fill(star);
+        } else if(k === "DrawCircle") {
+            x.strokeStyle=tint(c,255,88,98,opacity);x.lineWidth=Math.max(2,h*.035*pow);x.lineCap='round';x.beginPath();x.ellipse(w/2,h/2,w*.54,h*.58,0,-Math.PI/2,-Math.PI/2+p*Math.PI*2);x.stroke();
+        } else if (k === "StrikeThrough") {
+            x.strokeStyle=tint(c,255,68,82,opacity); x.lineWidth=Math.max(2,h*.055*pow); x.lineCap="round";
+            x.beginPath(); x.moveTo(0,h*.54); x.lineTo(w*p,h*.54); x.stroke();
+        } else if (k === "Halftone") {
+            x.clip(outline,"evenodd"); x.fillStyle=tint(c,255,231,89,210/255*amplitude);
+            const spacing=clamp(h/8,5,24), radius=Math.max(1,spacing*.23*pow*edge);
+            for(let y=spacing/2;y<h;y+=spacing)for(let sx=spacing/2;sx<w;sx+=spacing){
+                x.beginPath(); x.arc(sx,y,radius,0,Math.PI*2); x.fill();
             }
+        } else if (k === "ColorSplit") {
+            const offset=Math.max(2,w*.012*pow);
+            if(alpha){
+                x.save(); x.clip(outline,"evenodd");
+                for(const [shift,red,green,blue] of [[-offset,255,30,112],[offset,22,235,255]]){
+                    const layer=blank(r.id+"-color-split",Math.ceil(w),Math.ceil(h)), surface=layer.getContext("2d");
+                    surface.fillStyle=tint(c,red,green,blue,150/255*amplitude); surface.fillRect(0,0,w,h);
+                    multiply(layer,alpha); x.drawImage(layer,shift,0);
+                }
+                x.restore();
+            }
+            x.strokeStyle=tint(c,255,255,255,100/255*amplitude); x.lineWidth=Math.max(1,h*.012);
+            for(let band=0;band<5;band++){
+                const y=(.18+band*.16)*h+Math.sin(p*18+band)*h*.025;
+                x.beginPath(); x.moveTo(w*.06,y); x.lineTo(w*(.3+.12*(band%3)),y); x.stroke();
+            }
+        } else if (k === "PaperCorner") {
+            const fold=Math.max(3,Math.min(w,h)*.32*pow*(.25+.75*p));
+            x.beginPath(); x.moveTo(w,0); x.lineTo(w-fold,0); x.lineTo(w,fold); x.closePath();
+            x.fillStyle=tint(c,20,30,44,150/255*opacity); x.fill();
+            x.fillStyle=tint(c,244,247,248,230/255*opacity); x.fill();
+            x.strokeStyle=tint(c,125,138,145,190/255*opacity); x.lineWidth=Math.max(1,h*.012);
+            x.beginPath(); x.moveTo(w-fold,0); x.lineTo(w,fold); x.stroke();
         } else if (k === "Border") {
             const g = x.createConicGradient(p * Math.PI * 2, w / 2, h / 2); g.addColorStop(0, tint(c,255,211,67,amplitude)); g.addColorStop(.3, tint(c,255,255,255,amplitude)); g.addColorStop(1, tint(c,255,211,67,.117647)); x.strokeStyle = g; x.lineWidth = Math.max(3, h * .065 * pow); x.stroke(outline);
         } else if (k === "Ripple") {
@@ -169,6 +294,14 @@
             for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6, spread = .15 + p * .45 * pow, px = w / 2 + Math.cos(a) * w * (.5 + spread), py = h / 2 + Math.sin(a) * h * (.5 + spread); x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * h * .35 * pow, py + Math.sin(a) * h * .35 * pow); x.stroke(); }
         } else if (k === "OrbitBurst") {
             for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 + p * Math.PI * 2 * c.options.speed, radius = .45 + p * .7 * pow; x.fillStyle = i % 2 ? tint(c,112,243,222,240/255*amplitude) : tint(c,255,230,78,240/255*amplitude); x.beginPath(); x.arc(w / 2 + Math.cos(a) * w * radius, h / 2 + Math.sin(a) * h * radius, Math.max(2, h * .085 * pow * (1 - p * .6)), 0, Math.PI * 2); x.fill(); }
+        } else if (k === "Pollen") {
+            x.save();x.clip(outline,"evenodd");
+            for(let i=0;i<18;i++){const seed=i*2.3999632,drift=(p*1.4+i*.173)%1,px=(.08+((i*37)%83)/100+Math.sin(seed+p*4)*.035)*w,py=(1-drift)*h+Math.sin(seed+p*7)*h*.035,r=Math.max(1.5,h*(.012+(i%4)*.003)*pow);x.fillStyle=tint(c,255,207,76,(i%3===0?220:205)/255*opacity);x.beginPath();x.arc(px,py,r,0,Math.PI*2);x.fill();}
+            x.restore();
+        } else if (k === "Steam") {
+            x.save();x.clip(outline,"evenodd");x.lineCap="round";
+            for(let i=0;i<4;i++){const base=w*(.2+i*.2),phase=p*2.4+i*1.7,lift=((p*1.3+i*.19)%1)*h*.32;x.beginPath();x.moveTo(base,h);x.bezierCurveTo(base-w*.09,h*.72-lift,base+w*.09,h*.44-lift,base+Math.sin(phase)*w*.06,h*.14-lift);x.strokeStyle=tint(c,245,249,255,.145*opacity*(.45+.55*Math.sin(p*Math.PI+i)**2));x.lineWidth=Math.max(2,h*.035*pow);x.filter=`blur(${Math.max(1,h*.025)}px)`;x.stroke();}
+            x.filter="none";x.restore();
         }
         x.restore();
     }
@@ -200,6 +333,7 @@
         if(a.customRaster||r.softness?.enabled||r.contentOnly){applySoftArea(frame,r,parent,time,a,clips);return;}
         const b = { x: r.bounds.x * data.width - parent.x, y: r.bounds.y * data.height - parent.y, width: r.bounds.width * data.width, height: r.bounds.height * data.height };
         const numeric = a.digits.length > 0 && clips.some(c => ["DigitRoll", "Bounce"].includes(c.options.kind) && time >= c.start && time < c.start + c.duration), s = motion(clips, time, b, numeric);
+        const special=rasterMotion(clips,time);
         const masks = maskCoverage(r, parent, time, r.id + "-masks");
         if (!identity(s) || numeric) {
             const old = copy(r.id + "-old", frame), effect = blank(r.id + "-effect", frame.width, frame.height), e = effect.getContext("2d");
@@ -213,7 +347,7 @@
                 e.clearRect(0, 0, effect.width, effect.height); e.drawImage(old, 0, 0); e.globalCompositeOperation = "destination-out"; e.drawImage(image(a.erase), ox, oy); e.globalCompositeOperation = "source-over"; e.drawImage(image(a.fill), ox, oy);
                 e.save(); e.translate(ox, oy); transform(e, local(a), s);crop(e,local(a),s); e.globalAlpha = clamp(s.alpha); digits(e, r, a, clips, time, { image: fg, backing }); e.globalAlpha = 1;
                 for (const c of clips) if (time >= c.start && (time < c.start + c.duration || holds(c.options.kind))) decoration(e, r, a.width, a.height, c, progress(c, time), s.alpha); e.restore();
-            } else { e.save(); transform(e, b, s);crop(e,b,s); e.globalAlpha = clamp(s.alpha); e.drawImage(old, 0, 0); e.restore(); }
+            } else { e.save(); transform(e, b, s);crop(e,b,s); e.globalAlpha = clamp(s.alpha);if(special)drawRasterMotion(e,image(a.image),special,time,a.x-parent.x,a.y-parent.y);else e.drawImage(old, 0, 0); e.restore(); }
             const coverage = blank(r.id + "-coverage", frame.width, frame.height), c = coverage.getContext("2d"); c.fillStyle = "white";
             if (numeric) c.fillRect(0, 0, coverage.width, coverage.height);
             else { c.fill(shape(r, b), "evenodd"); c.save(); transform(c, b, s); c.fill(shape(r, b), "evenodd"); c.restore(); }
@@ -241,7 +375,8 @@
         if(identity(s)&&!clips.some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind))))return;
         const composed=blank(r.id+"-soft-work",frame.width,frame.height),c=composed.getContext("2d");c.drawImage(frame,0,0);
         if (numericAt(a, clips, time) || !identity(s)) replaceSource(c, a, b.x, b.y, numericAt(a, clips, time));
-        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else if(!identity(s)) c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
+        const special=rasterMotion(clips,time);
+        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else if(special)drawRasterMotion(c,image(a.image),special,time,b.x,b.y);else if(!identity(s)) c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
         for(const clip of clips)if(time>=clip.start&&(time<clip.start+clip.duration||holds(clip.options.kind)))decoration(c,r,b.width,b.height,clip,progress(clip,time),s.alpha);
         c.restore();const masks=maskCoverage(r,parent,time,r.id+"-masks");multiply(composed,masks);
         const f=frame.getContext("2d");f.globalCompositeOperation="destination-out";f.drawImage(masks,0,0);f.globalCompositeOperation="lighter";f.drawImage(composed,0,0);f.globalCompositeOperation="source-over";
@@ -316,8 +451,9 @@
                 const number = blank(r.id + "-number", a.width, a.height);
                 const numeric=digits(number.getContext("2d"), r, a, clips, time);
                 if (numeric) { f.clearRect(0, 0, a.width, a.height); f.drawImage(number, 0, 0); }
+                const specialClip=rasterMotion(clips,time);
                 multiply(frame, image(numeric?(a.numericShape??a.shape):a.shape)); const masks = maskCoverage(r, a, time, r.id + "-masks"); multiply(frame, masks);
-                ctx.save(); ctx.translate(a.x, a.y); transform(ctx, local(a), s);crop(ctx,local(a),s); ctx.globalAlpha = clamp(s.alpha); ctx.drawImage(frame, 0, 0); ctx.globalAlpha = 1;
+                ctx.save(); ctx.translate(a.x, a.y); transform(ctx, local(a), s);crop(ctx,local(a),s); ctx.globalAlpha = clamp(s.alpha);if(specialClip&&!numeric)drawRasterMotion(ctx,frame,specialClip,time);else ctx.drawImage(frame, 0, 0); ctx.globalAlpha = 1;
                 if (r.masks.some(m => m.enabled)) {
                     const decor = blank(r.id + "-decor", a.width, a.height), d = decor.getContext("2d");
                     for (const c of clips) if (time >= c.start && (time < c.start + c.duration || holds(c.options.kind))) decoration(d, r, a.width, a.height, c, progress(c, time), s.alpha);
@@ -326,7 +462,22 @@
                 ctx.restore();
             }
         }
-        if (sourceCoverage) multiply(canvas, sourceCoverage);
+        if (sourceCoverage) {
+            // Keep the existing transparency guard outside authored animation areas.
+            // New motion and ornaments may intentionally extend past the original alpha.
+            const areas = data.regions.filter(r => visible(r) && clipsFor(r).some(c =>
+                (newEffects.has(c.options.kind) || c.allowTransparentMotion) && time >= c.start && (time < c.start + c.duration || holds(c.options.kind))));
+            if (areas.length === 0) multiply(canvas, sourceCoverage);
+            else {
+                const coverage = copy("motion-source-coverage", sourceCoverage), mask = coverage.getContext("2d");
+                mask.fillStyle = "white";
+                for (const r of areas) {
+                    const a = assets.get(r.id);
+                    mask.fillRect(a.x-a.width, a.y-a.height, a.width*3, a.height*3);
+                }
+                multiply(canvas, coverage);
+            }
+        }
         drawBlurFocus();
         if (plan.enabled && plan.exitFade && time >= B) {
             const alpha = plan.exitFrames <= 1 ? 0 : clamp((plan.endFrame - 1 - time * fps) / (plan.exitFrames - 1));

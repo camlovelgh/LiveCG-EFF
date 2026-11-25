@@ -47,10 +47,12 @@ public partial class MainWindow : Window
         Choices(EndHoldBox,["0","0.5","1","2","3"]);Choices(ClipDurationBox,["0.5","0.8","1","1.5","2","3","5"]);
         Choices(EffectSpeedBox,["0.25","0.5","1","1.5","2","4"]);Choices(StrengthBox,ProductInfo.Strengths.Select(ProductInfo.StrengthName).ToArray());
         Choices(BackgroundBox,["테두리색 추정","투명","직접 색상","원본 유지"]);
-        foreach(var kind in Enum.GetValues<EffectKind>().Where(k=>k!=EffectKind.UserMotion))
+        Choices(EffectCategoryBox,["전체","등장","반복","꾸미기"]);EffectCategoryBox.SelectedIndex=0;
+        Choices(NewEffectCategory,["전체","등장","반복","꾸미기"]);NewEffectCategory.SelectedIndex=0;
+        foreach(var kind in ProductInfo.SelectableEffects.Where(k=>k!=EffectKind.UserMotion))
         {
             var thumbnail=new EffectThumbnail(kind);thumbnail.MouseLeftButtonDown+=(_,_)=>SelectEffect(kind);
-            _thumbnails.Add(thumbnail);EffectsGrid.Children.Add(thumbnail);
+            _thumbnails.Add(thumbnail);(ProductInfo.IsNewEffect(kind)?NewEffectsGrid:EffectsGrid).Children.Add(thumbnail);
         }
         Preview.RegionSelected+=region=>SelectRegion(region);
         Preview.RegionEdited+=()=>{MarkEdited();RefreshRegionList();RefreshTimeline();UpdateSelectionLabel();};
@@ -139,6 +141,7 @@ public partial class MainWindow : Window
     {
         if(_clip is not null)CommitClip(false);CommitRegion(false);CommitMask(false);ClearMaskSelection();StopPlayback();
         _loading=true;_current=job;_region=null;_clip=null;_time=0;
+        StartGuide.Visibility=job is null?Visibility.Visible:Visibility.Collapsed;
         try{Preview.SetJob(job);}catch(Exception ex){Error(ex);}
         Preview.ShowEffects=false;EffectsPreviewCheck.IsChecked=false;RegionList.ItemsSource=job?.Regions;
         TimelineEditor.SetJob(job,_video);_loading=false;SelectRegion(LayerGraph.Rows(job?.Regions??[]).FirstOrDefault()?.Region);RefreshRegionList();
@@ -270,6 +273,7 @@ public partial class MainWindow : Window
         if(_busy||_region is null){Notify("먼저 효과를 적용할 영역을 선택하세요.");return;}
         if(!CommitClip(true))return;
         var options=(_clip?.Options??_defaultEffect).Current();
+        if(ProductInfo.IsRetiredEffect(options.Kind)){Notify("삭제된 효과입니다. 추가할 다른 효과를 먼저 선택하세요.");return;}
         if(options.Kind==EffectKind.TravelRoute&&_clip?.Route is null){OpenRouteEditor(null,null);return;}
         var clip=TimelineRules.Append(_region,options,_clip?.Duration??_defaultClipDuration,_video.Fps);
         clip.Loop=_clip?.Loop??_defaultLoop;clip.LoopPeriod=_clip?.LoopPeriod??_defaultLoopPeriod;
@@ -282,6 +286,7 @@ public partial class MainWindow : Window
     private void DuplicateClip(object sender,RoutedEventArgs e)
     {
         if(_busy||_region is null||_clip is null||!CommitClip(true))return;
+        if(ProductInfo.IsRetiredEffect(_clip.Options.Kind)){Notify("삭제된 효과는 복제할 수 없습니다.");return;}
         var clone=_clip.Copy();if(clone.SequenceId is not null)clone.SequenceId=Guid.NewGuid();clone.Start=_region.Clips.Select(c=>c.End).DefaultIfEmpty(0).Max();clone.Validate();
         _region.Clips.Add(clone);_clip=clone;_selectionEpoch++;LoadClipFields();TimelineEditor.SelectedClip=clone;MarkEdited();RefreshRegionList();RefreshTimeline();
     }
@@ -381,7 +386,7 @@ public partial class MainWindow : Window
                 Fps = defaults.Video.Fps == 24 ? VideoOptions.DefaultFps : defaults.Video.Fps,
                 Output = OutputKind.Browser
             };
-            _defaultPlayback=defaults.Playback with{};_defaultEffect=defaults.Effect;_defaultClipDuration=defaults.ClipDuration;_defaultLoop=defaults.Loop;_defaultLoopPeriod=defaults.LoopPeriod;_defaultMotion=defaults.Motion?.Copy();_editor=defaults.Editor;OutputFolderBox.Text=defaults.OutputDirectory;
+            _defaultPlayback=defaults.Playback with{};_defaultEffect=ProductInfo.IsRetiredEffect(defaults.Effect.Kind)?new():defaults.Effect;_defaultClipDuration=defaults.ClipDuration;_defaultLoop=defaults.Loop;_defaultLoopPeriod=defaults.LoopPeriod;_defaultMotion=defaults.Motion?.Copy();_editor=defaults.Editor;OutputFolderBox.Text=defaults.OutputDirectory;
         }catch(Exception ex){_video=new();_defaultPlayback=PlaybackSections.NewDefault();_defaultEffect=new();_defaultClipDuration=1;OutputFolderBox.Text="";Notify("기본값을 읽지 못해 초기값을 사용합니다: "+ex.Message);}
     }
     private void SaveDefaults(object sender,RoutedEventArgs e)
@@ -426,7 +431,7 @@ public partial class MainWindow : Window
         {
             var doc=DocumentStore.Load<ProjectDocument>(dialog.FileName);
             ProjectSources.Resolve(doc,dialog.FileName);
-            ApplyDocument(doc);_projectPath=dialog.FileName;_dirty=false;Notify("영역·타임라인·영상 옵션을 복원했습니다.");
+            ApplyDocument(doc);_projectPath=dialog.FileName;_dirty=false;Notify(EffectCompatibilityMessage(doc.Jobs.SelectMany(j=>j.Regions))??"영역·타임라인·영상 옵션을 복원했습니다.");
         }catch(Exception ex){Error(ex);}
     }
     public void ApplyDocument(ProjectDocument document,bool resetHistory=true)
@@ -453,6 +458,7 @@ public partial class MainWindow : Window
             if(MessageBox.Show(this,$"선택한 {targets.Count}개 파일의 영역·타임라인과 영상 옵션을 교체할까요?","템플릿 적용",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             foreach(var job in targets){job.Regions=LayerGraph.Copy(template.Regions);job.Playback=template.Playback with{};job.Status="템플릿 적용";job.Progress=0;}
             _region=null;_clip=null;_video=template.Video;ShowVideo();DisplayJob(_current);MarkEdited(true);
+            if(EffectCompatibilityMessage(template.Regions) is { } notice)Notify(notice);
         }catch(Exception ex){Error(ex);}
     }
     private void ChooseOutput(object sender,RoutedEventArgs e)

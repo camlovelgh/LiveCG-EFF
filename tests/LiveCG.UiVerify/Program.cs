@@ -181,12 +181,33 @@ internal static class Program
             Check(window.FindName("IntensitySlider") is null&&Control<ComboBox>(window,"StrengthBox").Items.Count==5,"strength has exactly five choices");
             Check(window.FindName("ZoomInButton") is not null&&window.FindName("ZoomOutButton") is not null,"precision zoom buttons exist");
             Check(window.FindName("VideoDurationBox") is null,"manual video duration removed");
-            Check(Control<System.Windows.Controls.Primitives.UniformGrid>(window,"EffectsGrid").Children.Count==21,"21 effect thumbnails including travel editor available");
+            var startGuide=Control<Border>(window,"StartGuide");
+            Check(startGuide.IsVisible&&Control<Button>(window,"StartGuideImportButton").IsVisible,
+                "empty editor shows the start guide and import button");
+            Call(window,"DetachPreview",window,new RoutedEventArgs());Pump();
+            var detachedPreview=Window.GetWindow(startGuide);
+            Check(detachedPreview is not null&&detachedPreview!=window&&detachedPreview.AllowDrop&&startGuide.IsVisible,
+                "start guide and drag-and-drop are available in the detached editor");
+            if(detachedPreview!=window)detachedPreview?.Close();
+            Pump();
+            var basic=Control<System.Windows.Controls.Primitives.UniformGrid>(window,"EffectsGrid").Children.OfType<EffectThumbnail>().ToList();
+            var added=Control<System.Windows.Controls.Primitives.UniformGrid>(window,"NewEffectsGrid").Children.OfType<EffectThumbnail>().ToList();
+            Check(basic.Count==18&&basic.All(thumb=>!ProductInfo.IsRetiredEffect(thumb.Kind)&&!ProductInfo.IsNewEffect(thumb.Kind)),"basic tab excludes retired and new effects");
+            Check(added.Count==27&&added.All(thumb=>ProductInfo.IsNewEffect(thumb.Kind)),"NEW tab contains all new thumbnail effects");
+            var newSearch=Control<TextBox>(window,"NewEffectSearch");
+            newSearch.Text="타자기";Pump();
+            Check(added.Count(thumb=>thumb.Visibility==Visibility.Visible)==1&&basic.All(thumb=>thumb.Visibility==Visibility.Visible),"new-effect search is independent of basic effects");
+            newSearch.Text="";Pump();
+            Check(Control<ItemsControl>(window,"BundledPresets").Items.Count==9,"NEW tab includes built-in editable presets");
             Check(typeof(MainWindow).GetMethod("Redetect",BindingFlags.NonPublic|BindingFlags.Instance) is null,"automatic detection UI handler removed");
             Check(Control<ComboBox>(window,"FpsBox").Text=="60","saved default fps restored");
             var path=TestFixtures.Create(folder);var secondPath=Path.Combine(folder,"두 번째 PNG.png");File.Copy(path,secondPath,true);
             var job=new ImageJob{SourcePath=path,Width=960,Height=540};
             var secondJob=new ImageJob{SourcePath=secondPath,Width=960,Height=540};
+            window.ApplyDocument(new(){Jobs=[job,secondJob],Video=new(){Output=OutputKind.Webm,Fps=30,EndHold=.5}});Layout(window);
+            Check(startGuide.Visibility==Visibility.Collapsed,"the start guide is hidden when an image is open");
+            window.ApplyDocument(new());Layout(window);
+            Check(startGuide.IsVisible,"the start guide returns when the editor becomes empty");
             window.ApplyDocument(new(){Jobs=[job,secondJob],Video=new(){Output=OutputKind.Webm,Fps=30,EndHold=.5}});Layout(window);
             Check(job.Regions.Count==0,"PNG begins without automatic regions");
             Check(Control<ComboBox>(window,"FpsBox").Text=="30","loaded project keeps its fps over defaults");
@@ -254,7 +275,7 @@ internal static class Program
             var saved=DocumentStore.Load<AppDefaults>(DocumentStore.DefaultsPath);
             Check(saved.Video.Fps==24&&saved.Effect.Strength==StrengthLevel.Strong&&Math.Abs(saved.ClipDuration-1.4)<1e-8,"defaults save video and selected clip options");
             var reopened=new MainWindow();Pump();
-            Check(Control<ComboBox>(reopened,"FpsBox").Text=="24"&&Control<ComboBox>(reopened,"StrengthBox").SelectedIndex==ProductInfo.StrengthIndex(StrengthLevel.Strong),"new application restores three-level defaults");
+            Check(Control<ComboBox>(reopened,"FpsBox").Text=="30"&&Control<ComboBox>(reopened,"StrengthBox").SelectedIndex==ProductInfo.StrengthIndex(StrengthLevel.Strong),"legacy 24 fps default migrates to 30 fps while keeping effect strength");
             typeof(MainWindow).GetField("_dirty",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(reopened,false);reopened.Close();
             WorkflowUiChecks.Run(window,folder,Check);
             StudioUiChecks.Run(window,folder,Check);
@@ -278,7 +299,7 @@ internal static class Program
             Control<CheckBox>(window,"SnapCheck").IsChecked=true;Control<CheckBox>(window,"RippleCheck").IsChecked=true;
             Control<ListBox>(window,"RegionList").SelectedItem=demo.Regions[3];Call(window,"Seek",3.55,true);Pump();
             Control<CheckBox>(window,"HideOverlaysCheck").IsChecked=true;Snapshot(window,"clean-preview.png");Control<CheckBox>(window,"HideOverlaysCheck").IsChecked=false;
-            Control<TabControl>(window,"EffectsTabs").SelectedIndex=1;Control<CheckBox>(window,"ClipLoopCheck").IsChecked=true;Snapshot(window,"clip-properties.png");Control<TabControl>(window,"EffectsTabs").SelectedIndex=0;
+            Control<TabControl>(window,"EffectsTabs").SelectedItem=Control<TabItem>(window,"ClipPropertiesTab");Control<CheckBox>(window,"ClipLoopCheck").IsChecked=true;Snapshot(window,"clip-properties.png");Control<TabControl>(window,"EffectsTabs").SelectedIndex=0;
             Snapshot(window,"timeline-editor.png");Snapshot(window,"timeline-minimum.png",1128,720);
             var editorRoot=(FrameworkElement)window.Content;var effectTabs=Control<TabControl>(window,"EffectsTabs");var timelineScroll=Control<ScrollViewer>(window,"TimelineScroll");
             Check(effectTabs.ActualHeight>100&&timelineScroll.TranslatePoint(new Point(timelineScroll.ActualWidth,0),editorRoot).X<=effectTabs.TranslatePoint(new Point(0,0),editorRoot).X,"minimum layout keeps effect library visible beside timeline");

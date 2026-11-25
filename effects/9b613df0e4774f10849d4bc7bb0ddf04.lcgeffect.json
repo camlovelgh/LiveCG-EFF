@@ -1,0 +1,90 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf04",
+  "Name": "고무줄처럼 늘어나기",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "가로·세로 크기가 엇갈리며 늘었다 돌아옵니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 0.8,
+      "Options": {
+        "Kind": "UserMotion",
+        "Strength": "Medium",
+        "Speed": 1
+      },
+      "Enabled": true,
+      "Loop": true,
+      "LoopPeriod": 0.8,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 24,
+        "Tracks": [
+          {
+            "Property": "ScaleX",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 5,
+                "Value": 1.28,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 10,
+                "Value": 0.82,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 16,
+                "Value": 1.12,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 24,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              }
+            ]
+          },
+          {
+            "Property": "ScaleY",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 5,
+                "Value": 0.78,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 10,
+                "Value": 1.16,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 16,
+                "Value": 0.94,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 24,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

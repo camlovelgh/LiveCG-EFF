@@ -51,7 +51,12 @@ public partial class MainWindow
         MarkEdited(true);
     }
 
-    private void ShowFinalOutput(object sender, RoutedEventArgs e) => OutputExpander.IsExpanded = true;
+    private void ShowFinalOutput(object sender, RoutedEventArgs e)
+    {
+        OutputExpander.IsExpanded=true;
+        OutputSettingsScroll.ScrollToTop();
+        OutputExpander.BringIntoView();
+    }
 
     private void RelinkFolder()
     {

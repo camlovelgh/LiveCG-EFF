@@ -1,0 +1,45 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf02",
+  "Name": "동전처럼 돌기",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "선택 영역을 한 바퀴씩 회전합니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 1,
+      "Options": {
+        "Kind": "UserMotion",
+        "Strength": "Medium",
+        "Speed": 1
+      },
+      "Enabled": true,
+      "Loop": true,
+      "LoopPeriod": 1,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 30,
+        "Tracks": [
+          {
+            "Property": "Rotation",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 0,
+                "Easing": "Linear"
+              },
+              {
+                "Frame": 30,
+                "Value": 360,
+                "Easing": "Linear"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

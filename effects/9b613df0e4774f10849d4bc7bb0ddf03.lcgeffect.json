@@ -1,0 +1,55 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf03",
+  "Name": "동전 뒤집기",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "선택 영역의 가로 폭을 줄였다 다시 펼쳐 뒤집는 느낌을 냅니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 1,
+      "Options": {
+        "Kind": "UserMotion",
+        "Strength": "Medium",
+        "Speed": 1
+      },
+      "Enabled": true,
+      "Loop": true,
+      "LoopPeriod": 1,
+      "Motion": {
+        "Fps": 30,
+        "LengthFrames": 30,
+        "Tracks": [
+          {
+            "Property": "ScaleX",
+            "Keys": [
+              {
+                "Frame": 0,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 13,
+                "Value": 0.03,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 16,
+                "Value": 0.03,
+                "Easing": "EaseInOut"
+              },
+              {
+                "Frame": 30,
+                "Value": 1,
+                "Easing": "EaseInOut"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

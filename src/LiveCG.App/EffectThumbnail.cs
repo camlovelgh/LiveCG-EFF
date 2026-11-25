@@ -58,6 +58,7 @@ public sealed class EffectThumbnail : SKElement, IDisposable
         }
         _scene=new(_sample);
         _region=new(){Bounds=new(.14,.22,.72,.56),Clips=[new(){Duration=1.5,Options=new(){Kind=kind,Strength=StrengthLevel.Strong}}]};
+        if(kind is EffectKind.PopReturn or EffectKind.Squash){_region.Clips[0].Loop=true;_region.Clips[0].LoopPeriod=.75;}else if(kind==EffectKind.Blink){_region.Clips[0].Loop=true;_region.Clips[0].LoopPeriod=1.5;}else if(kind==EffectKind.Wave){_region.Clips[0].Loop=true;_region.Clips[0].LoopPeriod=.9;}
         if(kind==EffectKind.TravelRoute){_region.Bounds=new(.05,.05,.9,.9);_region.OverlayOnly=true;_region.Background=BackgroundMode.KeepOriginal;_region.Clips[0].Route=TravelRoute.Example() with{Arrival=false,IconSize=34};_region.Clips[0].Duration=2;}
         PaintSurface+=Paint;
         _timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(65)};
@@ -74,6 +75,7 @@ public sealed class EffectThumbnail : SKElement, IDisposable
         using var p=new SKPaint{Color=SKColors.White,IsAntialias=true};
         using var font=new SKFont(SKTypeface.FromFamilyName("Malgun Gothic"),Math.Max(10,e.Info.Height*.16f));
         c.DrawText(ProductInfo.EffectName(Kind),6,e.Info.Height-5,font,p);
+        if(ProductInfo.IsNewEffect(Kind)){p.Color=new SKColor(255,255,255);using var badge=new SKPaint{Color=new SKColor(255,95,112),IsAntialias=true};var rect=SKRect.Create(e.Info.Width-39,4,35,17);c.DrawRoundRect(rect,4,4,badge);using var labelFont=new SKFont(SKTypeface.FromFamilyName("Arial",SKFontStyle.Bold),9);c.DrawText("NEW",rect.Left+5,rect.Top+12,labelFont,p);}
     }
     public void Dispose(){_timer.Stop();_scene.Dispose();_sample.Dispose();}
 }

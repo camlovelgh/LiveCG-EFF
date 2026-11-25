@@ -15,7 +15,7 @@ public static class ClipTiming
     }
     public static List<EffectClip> EffectiveClips(IEnumerable<EffectClip> clips,double time)
     {
-        var list=clips.Where(c=>c.Enabled).OrderBy(c=>c.Start).ToList();var chosen=list.Where(c=>c.SequenceId is not null).GroupBy(c=>c.SequenceId).ToDictionary(g=>g.Key!.Value,g=>g.LastOrDefault(c=>c.Start<=time)??g.First());
+        var list=clips.Where(c=>c.Enabled&&!ProductInfo.IsRetiredEffect(c.Options.Kind)).OrderBy(c=>c.Start).ToList();var chosen=list.Where(c=>c.SequenceId is not null).GroupBy(c=>c.SequenceId).ToDictionary(g=>g.Key!.Value,g=>g.LastOrDefault(c=>c.Start<=time)??g.First());
         return list.Where(c=>c.SequenceId is null||chosen[c.SequenceId.Value].Id==c.Id).ToList();
     }
 }

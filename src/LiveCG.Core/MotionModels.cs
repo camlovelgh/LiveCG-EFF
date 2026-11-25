@@ -33,6 +33,8 @@ public record MotionTrack
 }
 public record MotionDefinition
 {
+    private static readonly MotionDefinition BannerPopMotion=CreateBannerPop();
+    private static readonly MotionDefinition BannerSquashMotion=CreateBannerSquash();
     public int Fps { get; set; }=30;
     public int LengthFrames { get; set; }=60;
     public List<MotionTrack> Tracks { get; set; }=[];
@@ -84,5 +86,31 @@ public record MotionDefinition
         motion.SetKey(MotionProperty.ScaleX,0,.7);motion.SetKey(MotionProperty.ScaleY,0,.7);
         foreach(var p in new[]{MotionProperty.ScaleX,MotionProperty.ScaleY}){motion.SetKey(p,12,1);motion.SetKey(p,24,1.25);motion.SetKey(p,36,1);}
         motion.SetKey(MotionProperty.X,36,0);motion.SetKey(MotionProperty.X,60,1);return motion;
+    }
+    public static double BannerPopScale(double progress)=>BannerPopMotion.Value(MotionProperty.ScaleX,Math.Clamp(progress,0,1)*BannerPopMotion.LengthFrames);
+    public static (double X,double Y) BannerSquash(double progress)
+    {var frame=Math.Clamp(progress,0,1)*BannerSquashMotion.LengthFrames;return(BannerSquashMotion.Value(MotionProperty.ScaleX,frame),BannerSquashMotion.Value(MotionProperty.ScaleY,frame));}
+    private static MotionDefinition CreateBannerPop()
+    {
+        var motion=new MotionDefinition{Fps=30,LengthFrames=36};
+        foreach(var property in new[]{MotionProperty.ScaleX,MotionProperty.ScaleY})
+        {
+            motion.SetKey(property,0,1);
+            motion.SetKey(property,7,1.12);
+            motion.SetKey(property,15,.98);
+            motion.SetKey(property,23,1.04);
+            motion.SetKey(property,30,1);
+            motion.SetKey(property,36,1);
+        }
+        return motion;
+    }
+    private static MotionDefinition CreateBannerSquash()
+    {
+        var motion=new MotionDefinition{Fps=30,LengthFrames=30};
+        var x=new[]{(0,1d),(5,1.12),(11,.92),(18,1.04),(23,.98),(30,1d)};
+        var y=new[]{(0,1d),(5,.88),(11,1.08),(18,.96),(23,1.02),(30,1d)};
+        foreach(var key in x)motion.SetKey(MotionProperty.ScaleX,key.Item1,key.Item2);
+        foreach(var key in y)motion.SetKey(MotionProperty.ScaleY,key.Item1,key.Item2);
+        return motion;
     }
 }

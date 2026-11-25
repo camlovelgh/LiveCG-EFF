@@ -61,7 +61,7 @@
       </DataTemplate></ListBox.ItemTemplate>
      </ListBox>
     </DockPanel>
-    <StackPanel Grid.Row="1"><Button Content="최종 출력 설정" Click="ShowFinalOutput" HorizontalAlignment="Left"/><Expander x:Name="OutputExpander" Header="출력 설정 / 폴더" IsExpanded="False" Foreground="#DFE7EE" Margin="0,8,0,0">
+    <StackPanel Grid.Row="1"><Button Content="출력 설정 열기" Click="ShowFinalOutput" Background="#246F5B" Foreground="White" HorizontalAlignment="Left"/><Expander x:Name="OutputExpander" Header="출력 설정 / 폴더" IsExpanded="False" Foreground="#DFE7EE" Margin="0,8,0,0">
      <ScrollViewer x:Name="OutputSettingsScroll" MaxHeight="430" VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,5,0,0">
       <StackPanel.Resources><Style x:Key="OutputHeader" TargetType="TextBlock"><Setter Property="Foreground" Value="#80D7C0"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Margin" Value="3,10,3,5"/></Style></StackPanel.Resources>
       <TextBlock Text="① 출력 방식" Style="{StaticResource OutputHeader}"/><ComboBox x:Name="OutputKindBox" SelectionChanged="OutputKindChanged"/>
@@ -132,7 +132,24 @@
        </Grid>
       </Border>
      </StackPanel>
-     <local:PreviewControl x:Name="Preview"/>
+     <Grid>
+      <local:PreviewControl x:Name="Preview"/>
+      <Border x:Name="StartGuide" HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="#E6121E28" BorderBrush="#587B8A" BorderThickness="1" CornerRadius="10"
+              Padding="20" Margin="10" MaxWidth="520">
+       <StackPanel>
+        <TextBlock Text="배너 이미지에 효과를 더해 보세요" Foreground="#E8F3FA" FontSize="21" FontWeight="Bold"
+                   TextAlignment="Center" TextWrapping="Wrap"/>
+        <TextBlock Text="이미지를 불러오거나 이곳으로 끌어오면 편집을 시작합니다."
+                   Foreground="#B7C8D3" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,12"/>
+        <Button x:Name="StartGuideImportButton" Content="＋ 이미지 불러오기" Click="AddFiles"
+                HorizontalAlignment="Center" Background="#246F5B" Foreground="White" FontSize="15"
+                FontWeight="Bold" Padding="18,8"/>
+        <TextBlock Text="이미지 불러오기 → 영역 지정 → 효과 미리보기·출력" Foreground="#9EDCCB"
+                   FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Margin="0,12,0,0"/>
+       </StackPanel>
+      </Border>
+     </Grid>
     </DockPanel>
    </Border>
    </Grid>
@@ -163,18 +180,50 @@
   </Border>
   <GridSplitter x:Name="LayerHeightSplitter" Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#365467" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragStarted="PanelResizeStarted" DragCompleted="LayerHeightChanged" ToolTip="레이어 목록 높이 조절"/>
   <TabControl Grid.Row="3" x:Name="EffectsTabs" Background="#14202D" BorderBrush="#354A5C" Foreground="#DFE7EE" Padding="3" SelectionChanged="PropertyTabChanged">
-   <TabControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></TabControl.ItemsPanel>
+   <TabControl.ItemsPanel>
+    <ItemsPanelTemplate>
+     <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+       <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+       <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+      </Grid.ColumnDefinitions>
+     </Grid>
+    </ItemsPanelTemplate>
+   </TabControl.ItemsPanel>
    <TabControl.Template><ControlTemplate TargetType="TabControl"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><ItemsPresenter/><Border Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="3"><ContentPresenter ContentSource="SelectedContent"/></Border></Grid></ControlTemplate></TabControl.Template>
-   <TabItem Header="① 효과 · 21종">
+   <TabItem Header="기본 효과" Width="Auto" Grid.ColumnSpan="2">
     <DockPanel>
-     <StackPanel DockPanel.Dock="Top"><TextBox x:Name="EffectSearchBox" ToolTip="효과 / 내 효과 검색" TextChanged="FilterEffects"/>
+     <StackPanel DockPanel.Dock="Top"><TextBox x:Name="EffectSearchBox" ToolTip="기본 효과 검색" TextChanged="FilterEffects"/>
+      <ComboBox x:Name="EffectCategoryBox" SelectionChanged="EffectCategoryChanged" ToolTip="효과 분류"/>
+      <TextBlock x:Name="EffectCountText" Foreground="#9AB7C7" Margin="4,2"/>
+      <TextBlock x:Name="EffectFilterEmpty" Text="검색 조건에 맞는 효과가 없습니다." Foreground="#E7D8A2" Visibility="Collapsed"/>
       <Button Content="순차 블러 강조" Click="EditBlurFocus" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" ToolTip="블러 영역, 강조 순서와 전환 미리보기"/>
       <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
       <TextBlock Text="썸네일로 선택 효과 변경 · ＋로 새 효과 추가" TextWrapping="Wrap" Foreground="#A7BBC9" FontSize="10" Margin="4"/>
      </StackPanel><ScrollViewer VerticalScrollBarVisibility="Auto"><UniformGrid x:Name="EffectsGrid" Columns="3"/></ScrollViewer>
     </DockPanel>
    </TabItem>
-   <TabItem Header="② 클립 속성">
+   <TabItem Header="NEW 효과" Width="Auto" Grid.Column="2" Grid.ColumnSpan="2">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top">
+      <TextBox x:Name="NewEffectSearch" ToolTip="새 효과와 프리셋 검색" TextChanged="FilterNewEffects"/>
+      <ComboBox x:Name="NewEffectCategory" SelectionChanged="FilterNewEffects" ToolTip="새 효과 분류"/>
+      <TextBlock x:Name="NewEffectCount" Foreground="#9AB7C7" Margin="4,2"/>
+      <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
+     </StackPanel>
+     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+      <UniformGrid x:Name="NewEffectsGrid" Columns="3"/>
+      <TextBlock x:Name="BundledPresetTitle" Text="모션 프리셋" Foreground="#9AB7C7" Margin="4,8,4,3"/>
+      <ItemsControl x:Name="BundledPresets"><ItemsControl.ItemTemplate><DataTemplate><DockPanel Margin="2">
+       <Button DockPanel.Dock="Right" Content="삽입" Tag="{Binding}" Click="InsertBundledPreset"/>
+       <Button DockPanel.Dock="Right" Content="편집" Tag="{Binding}" Click="EditBundledPreset"/>
+       <TextBlock Text="{Binding Name}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+      </DockPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+     </StackPanel></ScrollViewer>
+    </DockPanel>
+   </TabItem>
+   <TabItem x:Name="ClipPropertiesTab" Header="클립 속성" Width="Auto" Grid.Column="4" Grid.ColumnSpan="2">
     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel TextElement.Foreground="#DFE7EE">
      <TextBlock x:Name="EffectLabel" Foreground="#7BEAC3" FontWeight="Bold" TextWrapping="Wrap" Margin="4,8"/>
      <Expander x:Name="ClipBasicSection" Header="기본 · 강도 / 속도" IsExpanded="True" Foreground="#BFE5D7" Margin="3,6">
@@ -196,13 +245,13 @@
      </Expander>
     </StackPanel></ScrollViewer>
    </TabItem>
-   <TabItem Header="③ 내 효과">
+   <TabItem Header="내 효과" Width="Auto" Grid.Row="1" Grid.ColumnSpan="3">
     <DockPanel><StackPanel DockPanel.Dock="Top"><TextBlock Text="내 모션 / 조합 에셋" Margin="4,8" Foreground="#BDADD9"/><TextBox x:Name="AssetSearchBox" ToolTip="내 효과 이름 / 분류 검색" TextChanged="FilterAssetSearch"/>
-     <WrapPanel><Button Content="새 모션" Click="NewMotionAsset"/><Button Content="조합 저장" Click="SaveEffectCombo"/><Button Content="삽입" Click="InsertAsset"/><Button Content="편집" Click="EditAsset"/></WrapPanel>
+     <WrapPanel><Button Content="새 모션" Click="NewMotionAsset"/><Button Content="조합 저장" Click="SaveEffectCombo"/><Button Content="삽입" Click="InsertAsset"/><Button Content="편집" Click="EditAsset"/><Button Content="효과 폴더" Click="OpenAssetFolder"/><Button Content="새로고침" Click="ReloadAssets"/></WrapPanel>
      <Expander Header="에셋 관리 · 가져오기 / 내보내기" Foreground="#BBAFD0"><WrapPanel><Button Content="업데이트" Click="UpdateAssetClip"/><Button Content="복제" Click="DuplicateAsset"/><Button Content="삭제" Click="DeleteAsset"/><Button Content="가져오기" Click="ImportAsset"/><Button Content="내보내기" Click="ExportAsset"/><Button Content="★" Click="FavoriteAsset"/></WrapPanel></Expander>
     </StackPanel><ListBox x:Name="AssetList" MouseDoubleClick="InsertAsset"><ListBox.ItemTemplate><DataTemplate><StackPanel><local:AssetPreview Asset="{Binding}"/><TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/><TextBlock Text="{Binding Category}" Foreground="#93AABA" FontSize="10"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel>
    </TabItem>
-   <TabItem Header="④ 그룹·마스크">
+   <TabItem x:Name="GroupsTab" Header="그룹·마스크" Width="Auto" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3">
     <TabControl x:Name="GroupMaskTabs" Background="#14202D" Foreground="#DFE7EE" BorderBrush="#354A5C" Margin="0,6,0,0">
      <TabItem Header="그룹 구조"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
       <TextBlock x:Name="GroupRelationText" TextWrapping="Wrap" Foreground="#7BEAC4" Margin="4,8"/>

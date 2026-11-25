@@ -1,11 +1,14 @@
+param([string]$OutputDirectory)
+
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.Drawing
 $taskRoot=Split-Path $PSScriptRoot -Parent
 $taskVersion=([xml](Get-Content -LiteralPath (Join-Path $taskRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
 $taskParts=$taskVersion.Split('.');$taskTag='v'+$taskParts[0]+$taskParts[1]+$(if([int]$taskParts[2] -gt 0){$taskParts[2]}else{''})
-$taskBundle=Join-Path $taskRoot "dist/LiveCG-EFF-$taskVersion"
-$taskZip=Join-Path $taskRoot "dist/LiveCG-EFF-$taskVersion-win-x64.zip"
+if (!$OutputDirectory) { $OutputDirectory=Join-Path $taskRoot 'dist' }
+$taskBundle=Join-Path $OutputDirectory "LiveCG-EFF-$taskVersion"
+$taskZip=Join-Path $OutputDirectory "LiveCG-EFF-$taskVersion-win-x64.zip"
 $taskReport=[ordered]@{Version=$taskVersion}
 $taskArchive=[IO.Compression.ZipFile]::OpenRead($taskZip)
 try {

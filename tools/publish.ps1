@@ -1,10 +1,17 @@
+param([switch]$StartupDiagnostics,[string]$OutputDirectory)
+
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'bootstrap.ps1')
 $taskVersion = ([xml](Get-Content -LiteralPath (Join-Path $taskRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
-$taskPublish = Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion"
+$taskPackageName = "LiveCG-EFF-$taskVersion"
+if ($StartupDiagnostics) { $taskPackageName += '-startup-diagnostics' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $taskRoot 'dist' }
+$taskPublish = Join-Path $OutputDirectory $taskPackageName
 $taskAppFolder = Join-Path $taskPublish 'app'
 & (Join-Path $PSScriptRoot 'build-icon.ps1')
-& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true -o $taskAppFolder --disable-build-servers -m:1 -v minimal
+$taskBuildOptions = @()
+if ($StartupDiagnostics) { $taskBuildOptions += '-p:StartupDiagnostics=true' }
+& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true -o $taskAppFolder --disable-build-servers -m:1 -v minimal @taskBuildOptions
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 $taskFfmpeg = Get-ChildItem -LiteralPath (Join-Path $taskRoot '.tools\ffmpeg') -Filter ffmpeg.exe -Recurse | Select-Object -First 1
 $taskVendor = Split-Path (Split-Path $taskFfmpeg.FullName -Parent) -Parent
@@ -49,5 +56,15 @@ app 폴더: 실행에 필요한 프로그램과 런타임입니다. 이동하거
 licenses 폴더: 외부 라이선스 원문입니다.
 다른 PC로 옮길 때는 이 폴더 전체를 복사하세요.
 "@ | Set-Content -LiteralPath (Join-Path $taskPublish '먼저 읽어주세요.txt') -Encoding utf8
-Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-win-x64.zip") -Force
+if ($StartupDiagnostics) {
+@'
+LiveCG-EFF 시작 진단 · SunjooAn
+
+ZIP 전체를 새 폴더에 풀고 최상단 LiveCG-EFF.exe를 실행하세요.
+오류가 재현되면 Win+R에서 %LOCALAPPDATA%\LiveCG-EFF\Diagnostics 를 열고
+방금 생성된 startup-*.log 파일 하나를 보내주세요.
+이 폴더가 비어 있으면 %TEMP%\LiveCG-EFF\Diagnostics 에서 확인하세요.
+'@ | Add-Content -LiteralPath (Join-Path $taskPublish '먼저 읽어주세요.txt') -Encoding utf8
+}
+Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $OutputDirectory "$taskPackageName-win-x64.zip") -Force
 Write-Output "Ready: $(Join-Path $taskPublish 'LiveCG-EFF.exe')"

@@ -18,6 +18,10 @@ public partial class MainWindow
     private async void CheckForUpdateOnStartup(object? sender, EventArgs e)
     {
         ContentRendered -= CheckForUpdateOnStartup;
+#if LIVE_CG_STARTUP_DIAGNOSTICS
+        // Keep the diagnostic executable in place until the operator finishes collecting logs.
+        if (StartupDiagnostics.Enabled) return;
+#endif
         Closed += (_, _) => _updateCancellation.Cancel();
         if (Environment.GetEnvironmentVariable("LIVECG_DISABLE_WORKSPACE_RESTORE") == "1") return;
 

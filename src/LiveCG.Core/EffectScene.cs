@@ -42,7 +42,7 @@ public sealed partial class EffectScene : IDisposable
         Draw(canvas, regions, time); return bitmap;
     }
 
-    private static bool Identity(MotionState s)=>s.Alpha==1&&s.Scale==1&&s.ScaleX==1&&s.ScaleY==1&&s.X==0&&s.Y==0&&s.Angle==0&&!s.HasCrop;
+    private static bool Identity(MotionState s)=>s.Alpha==1&&s.Scale==1&&s.ScaleX==1&&s.ScaleY==1&&s.X==0&&s.Y==0&&s.Angle==0&&!s.HasCrop&&!s.HasReveal;
     private static void ClipCrop(SKCanvas canvas,SKRect bounds,MotionState s)
     {if(s.HasCrop)canvas.ClipRect(SKRect.Create(bounds.Left+bounds.Width*s.CropLeft,bounds.Top+bounds.Height*s.CropTop,Math.Max(0,bounds.Width*(1-s.CropLeft-s.CropRight)),Math.Max(0,bounds.Height*(1-s.CropTop-s.CropBottom))));}
     private static bool NumericAt(IReadOnlyList<EffectClip> clips, Layer layer, double time) =>
@@ -89,7 +89,9 @@ public sealed partial class EffectScene : IDisposable
             using var paint=new SKPaint{IsAntialias=true,Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255))};
             var roll=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.DigitRoll&&time>=c.Start&&time<c.End):null;
             var bounce=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Bounce&&time>=c.Start&&time<c.End):null;
+            var special=effects?EffectMotionRenderer.Active(clips,time):null;
             if((roll is not null||bounce is not null)&&layer.Digits.Count>0)DrawDigits(canvas,layer,roll,bounce,time,paint);
+            else if(special is not null)EffectMotionRenderer.Draw(canvas,layer.Image,special,time,paint);
             else if(!Identity(state)) canvas.DrawImage(layer.Image,0,0,Sampling,paint);
             if(effects)foreach(var clip in clips)
             {
@@ -134,12 +136,16 @@ public sealed partial class EffectScene : IDisposable
             if (ProductInfo.IsEntrance(clip.Options.Kind))
             {
                 var q = Math.Pow(p, 1 / speed); var ease = (float)(1 - Math.Pow(1 - q, 3));
-                if(clip.Options.Kind!=EffectKind.WipeRight)state.Alpha *= ease;
+                if(time<clip.End&&EffectMotionRenderer.IsRasterEffect(clip.Options.Kind))state.HasReveal=true;
+                if(clip.Options.Kind is not (EffectKind.WipeRight or EffectKind.WipeFromRight or EffectKind.WipeFromTop or EffectKind.WipeFromBottom or EffectKind.Typewriter or EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble))state.Alpha *= ease;
                 switch (clip.Options.Kind)
                 {
                     case EffectKind.RiseIn: state.Y += (1 - ease) * bounds.Height * (.65f + .4f * power); break;
                     case EffectKind.FallIn: state.Y -= (1 - ease) * bounds.Height * (.65f + .4f * power); break;
                     case EffectKind.WipeRight: state.CropRight=Math.Max(state.CropRight,1-ease); break;
+                    case EffectKind.WipeFromRight: state.CropLeft=Math.Max(state.CropLeft,1-ease); break;
+                    case EffectKind.WipeFromTop: state.CropBottom=Math.Max(state.CropBottom,1-ease); break;
+                    case EffectKind.WipeFromBottom: state.CropTop=Math.Max(state.CropTop,1-ease); break;
                     case EffectKind.ZoomIn: state.Scale *= .12f + .88f * ease; break;
                     case EffectKind.ZoomOutIn: state.Scale *= 1 + (1 - ease) * (.4f + .45f * power); break;
                 }
@@ -149,6 +155,14 @@ public sealed partial class EffectScene : IDisposable
             switch (clip.Options.Kind)
             {
                 case EffectKind.Zoom: state.Scale *= 1 + .23f * power * (float)Math.Pow(Math.Sin(p * Math.PI * speed), 2); break;
+                case EffectKind.PopReturn:
+                    var pop=1+(MotionDefinition.BannerPopScale((p*speed)%1)-1)*power;state.ScaleX*=(float)pop;state.ScaleY*=(float)pop;break;
+                case EffectKind.Squash:
+                    var squash=MotionDefinition.BannerSquash((p*speed)%1);state.ScaleX*=(float)(1+(squash.X-1)*power);state.ScaleY*=(float)(1+(squash.Y-1)*power);break;
+                case EffectKind.Blink:
+                    state.Alpha*=.12f+.88f*(.5f+.5f*MathF.Cos((float)(p*speed*Math.PI*4)));break;
+                case EffectKind.Wave:
+                    state.HasReveal=true;break;
                 case EffectKind.Bounce when !digitBounce: state.Y -= MathF.Abs(MathF.Sin((float)p * MathF.PI * 3 * speed)) * bounds.Height * .32f * power * envelope; break;
                 case EffectKind.Shake:
                     state.Angle += MathF.Sin((float)p * MathF.PI * 14 * speed) * 8 * power * envelope;
@@ -187,27 +201,30 @@ public sealed partial class EffectScene : IDisposable
                 { paint.MaskFilter = blur; canvas.DrawPath(outline, paint); }
                 paint.MaskFilter = null; paint.StrokeWidth = Math.Max(2, height * .025f); canvas.DrawPath(outline, paint);
                 break;
-            case EffectKind.Highlight:
-                paint.Color = Tint(new SKColor(255, 225, 32, (byte)(Math.Min(210, 120 * power) * opacity)));
-                paint.BlendMode = SKBlendMode.Multiply;
-                canvas.Save(); canvas.ClipPath(outline, antialias: true);
-                canvas.DrawRoundRect(SKRect.Create(-width * .02f, height * .3f, width * 1.04f * (float)(1 - Math.Pow(1 - p, 3)), height * .65f), height * .12f, height * .12f, paint); canvas.Restore();
-                break;
-            case EffectKind.Underline:
-                paint.Color=Tint(new SKColor(255,225,32,(byte)(Math.Min(210,120*power)*opacity)));
-                canvas.DrawRoundRect(SKRect.Create(-width*.03f,height*.86f,width*1.06f*(float)(1-Math.Pow(1-p,3)),Math.Max(2,height*.10f)),height*.05f,height*.05f,paint);break;
-            case EffectKind.Sparkle:
-                for (var i = 0; i < 8; i++)
+            case EffectKind.DrawCircle:
+                var circleRect=SKRect.Create(-width*.04f,-height*.08f,width*1.08f,height*1.16f);using(var circle=new SKPath()){circle.AddArc(circleRect,-90,360*p);paint.Color=Tint(new SKColor(255,88,98,(byte)(255*opacity)));paint.Style=SKPaintStyle.Stroke;paint.StrokeCap=SKStrokeCap.Round;paint.StrokeWidth=Math.Max(2,height*.035f*power);canvas.DrawPath(circle,paint);}break;
+            case EffectKind.StrikeThrough:
+                paint.Color=Tint(new SKColor(255,68,82,(byte)(255*opacity)));paint.Style=SKPaintStyle.Stroke;paint.StrokeCap=SKStrokeCap.Round;paint.StrokeWidth=Math.Max(2,height*.055f*power);canvas.DrawLine(0,height*.54f,width*p,height*.54f,paint);break;
+            case EffectKind.Halftone:
+                paint.Color=Tint(new SKColor(255,231,89,(byte)(210*amplitude)));canvas.Save();canvas.ClipPath(outline,antialias:true);
+                var spacing=Math.Clamp(height/8f,5,24);var dot=Math.Max(1,spacing*.23f*power*edge);
+                for(var yy=spacing*.5f;yy<height;yy+=spacing)for(var xx=spacing*.5f;xx<width;xx+=spacing)canvas.DrawCircle(xx,yy,dot,paint);
+                canvas.Restore();break;
+            case EffectKind.ColorSplit:
+                if(coverage is not null)
                 {
-                    var sx = width * (i % 4) / 3; var sy = i < 4 ? -height * .08f : height * 1.08f;
-                    var size = height * .22f * power * (.4f + .6f * MathF.Abs(MathF.Sin(p * 9 + i))) * edge;
-                    paint.Color = Tint(new SKColor(255, 247, 192, (byte)(255 * amplitude)));
-                    using var star = new SKPath();
-                    star.MoveTo(sx, sy - size); star.LineTo(sx + size * .23f, sy - size * .23f); star.LineTo(sx + size, sy);
-                    star.LineTo(sx + size * .23f, sy + size * .23f); star.LineTo(sx, sy + size); star.LineTo(sx - size * .23f, sy + size * .23f);
-                    star.LineTo(sx - size, sy); star.LineTo(sx - size * .23f, sy - size * .23f); star.Close(); canvas.DrawPath(star, paint);
+                    var offset=Math.Max(2,width*.012f*power);var alpha=(byte)(150*amplitude);
+                    using var redFilter=SKColorFilter.CreateBlendMode(Tint(new SKColor(255,30,112,alpha)),SKBlendMode.SrcIn);
+                    using var cyanFilter=SKColorFilter.CreateBlendMode(Tint(new SKColor(22,235,255,alpha)),SKBlendMode.SrcIn);
+                    using var redPaint=new SKPaint{ColorFilter=redFilter,IsAntialias=true};using var cyanPaint=new SKPaint{ColorFilter=cyanFilter,IsAntialias=true};
+                    canvas.Save();canvas.ClipPath(outline,antialias:true);canvas.Save();canvas.Translate(-offset,0);canvas.DrawImage(coverage,SKRect.Create(width,height),Sampling,redPaint);canvas.Restore();canvas.Save();canvas.Translate(offset,0);canvas.DrawImage(coverage,SKRect.Create(width,height),Sampling,cyanPaint);canvas.Restore();canvas.Restore();
                 }
-                break;
+                paint.Color=Tint(new SKColor(255,255,255,(byte)(100*amplitude)));paint.StrokeWidth=Math.Max(1,height*.012f);
+                for(var band=0;band<5;band++){var y=(.18f+band*.16f)*height+(float)Math.Sin(p*18+band)*height*.025f;canvas.DrawLine(width*.06f,y,width*(.3f+.12f*(band%3)),y,paint);}break;
+            case EffectKind.PaperCorner:
+                var fold=Math.Max(3,Math.Min(width,height)*.32f*power*(float)(.25+.75*p));using(var back=new SKPath()){back.MoveTo(width,0);back.LineTo(width-fold,0);back.LineTo(width,fold);back.Close();paint.Color=Tint(new SKColor(20,30,44,(byte)(150*opacity)));canvas.DrawPath(back,paint);}
+                using(var page=new SKPath()){page.MoveTo(width,0);page.LineTo(width-fold,0);page.LineTo(width,fold);page.Close();paint.Color=Tint(new SKColor(244,247,248,(byte)(230*opacity)));canvas.DrawPath(page,paint);}
+                using(var crease=new SKPaint{Color=Tint(new SKColor(125,138,145,(byte)(190*opacity))),IsAntialias=true,Style=SKPaintStyle.Stroke,StrokeWidth=Math.Max(1,height*.012f)})canvas.DrawLine(width-fold,0,width,fold,crease);break;
             case EffectKind.Border:
                 paint.Style = SKPaintStyle.Stroke; paint.StrokeWidth = Math.Max(3, height * .065f * power);
                 using (var shader = SKShader.CreateSweepGradient(new(width / 2, height / 2),
@@ -241,6 +258,29 @@ public sealed partial class EffectScene : IDisposable
                     canvas.DrawCircle(width / 2 + MathF.Cos(a) * width * radius, height / 2 + MathF.Sin(a) * height * radius, Math.Max(2, height * .085f * power * (1 - p * .6f)), paint);
                 }
                 break;
+            case EffectKind.Pollen:
+                canvas.Save();canvas.ClipPath(outline,antialias:true);
+                for(var i=0;i<18;i++)
+                {
+                    var seed=i*2.3999632f;var drift=(p*1.4f+i*.173f)%1f;
+                    var px=(.08f+((i*37)%83)/100f+(float)Math.Sin(seed+p*4)*.035f)*width;
+                    var py=(1-drift)*height+(float)Math.Sin(seed+p*7)*height*.035f;
+                    var radius=Math.Max(1.5f,height*(.012f+(i%4)*.003f)*power);
+                    paint.Color=Tint(i%3==0?new SKColor(255,207,76,(byte)(220*opacity)):new SKColor(255,242,177,(byte)(205*opacity)));
+                    canvas.DrawCircle(px,py,radius,paint);
+                }
+                canvas.Restore();break;
+            case EffectKind.Steam:
+                canvas.Save();canvas.ClipPath(outline,antialias:true);
+                for(var i=0;i<4;i++)
+                {
+                    using var vapor=new SKPath();var baseX=width*(.2f+i*.2f);var phase=p*2.4f+i*1.7f;var lift=(float)((p*1.3+i*.19)%1)*height*.32f;
+                    vapor.MoveTo(baseX,height);vapor.CubicTo(baseX-width*.09f,height*.72f-lift,baseX+width*.09f,height*.44f-lift,baseX+MathF.Sin(phase)*width*.06f,height*.14f-lift);
+                    using var blur=SKMaskFilter.CreateBlur(SKBlurStyle.Normal,Math.Max(1,height*.025f));
+                    using var vaporPaint=new SKPaint{IsAntialias=true,Style=SKPaintStyle.Stroke,StrokeCap=SKStrokeCap.Round,StrokeWidth=Math.Max(2,height*.035f*power),Color=Tint(new SKColor(245,249,255,(byte)(145*opacity*(.45f+.55f*MathF.Sin(p*MathF.PI+i)*MathF.Sin(p*MathF.PI+i))))),MaskFilter=blur};
+                    canvas.DrawPath(vapor,vaporPaint);
+                }
+                canvas.Restore();break;
         }
     }
 
@@ -459,6 +499,7 @@ public sealed class MotionState
     public float X { get; set; }
     public float Y { get; set; }
     public float Angle { get; set; }
+    public bool HasReveal { get; set; }
 }
 
 public static class DigitCells

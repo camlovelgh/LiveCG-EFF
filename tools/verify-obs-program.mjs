@@ -1,6 +1,6 @@
 // Isolated, portable OBS integration test. Never uses the user's profile or starts a stream/recording.
 import fs from 'node:fs/promises';import path from 'node:path';import {spawn,spawnSync} from 'node:child_process';import crypto from 'node:crypto';
-const root=path.resolve(process.argv[2]??'.'), portable=path.resolve(root,process.env.LIVECG_OBS_PORTABLE??'artifacts/v010-obs-portable'),config=path.join(portable,'config/obs-studio'),password=crypto.randomBytes(24).toString('hex'),port=4469,results=[];
+const root=path.resolve(process.argv[2]??'.'), portable=path.resolve(root,process.env.LIVECG_OBS_PORTABLE??'artifacts/v010-obs-portable'),config=path.join(portable,'config/obs-studio'),password=crypto.randomBytes(24).toString('hex'),port=Number(process.env.LIVECG_OBS_PORT??4469),results=[];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));const check=(ok,name)=>{results.push({ok:!!ok,name});console.log((ok?'PASS ':'FAIL ')+name);};
 try{await fs.access(path.join(portable,'bin/64bit/obs64.exe'));}catch{
     const installed=process.env.LIVECG_OBS_INSTALL??'C:/Program Files/obs-studio';
@@ -11,6 +11,7 @@ await fs.mkdir(path.join(config,'plugin_config/obs-websocket'),{recursive:true})
 await fs.writeFile(path.join(config,'plugin_config/obs-websocket/config.json'),JSON.stringify({server_enabled:true,server_port:port,auth_required:true,server_password:password,alerts_enabled:false,first_load:false}));
 await fs.writeFile(path.join(config,'global.ini'),'[General]\nFirstRun=false\nLastVersion=553648128\nEnableAutoUpdates=false\n\n[Basic]\nProfile=LiveCGTest\nProfileDir=LiveCGTest\nSceneCollection=LiveCGTest\nSceneCollectionFile=LiveCGTest\n\n[BasicWindow]\nStudioMode=true\n');
 await fs.mkdir(path.join(config,'basic/profiles/LiveCGTest'),{recursive:true});await fs.writeFile(path.join(config,'basic/profiles/LiveCGTest/basic.ini'),'[General]\nName=LiveCGTest\n[Video]\nBaseCX=160\nBaseCY=100\nOutputCX=160\nOutputCY=100\nFPSType=0\nFPSCommon=30\n');
+const newEffects=process.argv.includes('--new-effects');
 const linkedMode=process.argv.includes("--linked-output");
 const mixedEntrance=process.argv.includes("--mixed-entrance");
 const digitPreview=mixedEntrance||process.argv.includes("--digit-preview");
@@ -42,7 +43,8 @@ if(linkedMode){
  await fs.writeFile(linked.pointer??path.join(path.dirname(linked.entry),"pointer.js"),linked.firstPointer);
 }
 const focusEntry=nutriAlpha?path.join(root,nutriFixture,'scoped/index.html'):blurFocus?JSON.parse(await fs.readFile(path.join(root,'artifacts/v010-core/blur-focus-test.json'),'utf8'))[focusTimeline?'timelineEntry':'entry']:null;
-const folder=blurFocus?path.dirname(focusEntry):digitPreview?path.join(root,'artifacts/digit-preview-test.obs'):updateMode?path.dirname(updateFixture.entry):path.join(root,'artifacts/v010-core/한글 로컬 & 패키지.obs');
+const effectsFixture=path.join(root,'artifacts/v160-effects');
+const folder=newEffects?path.join(effectsFixture,'browser'):blurFocus?path.dirname(focusEntry):digitPreview?path.join(root,'artifacts/digit-preview-test.obs'):updateMode?path.dirname(updateFixture.entry):path.join(root,'artifacts/v010-core/한글 로컬 & 패키지.obs');
 if(digitPreview){
     await fs.cp(path.join(root,'artifacts/v010-core/redraw-price.obs'),folder,{recursive:true});
     await fs.copyFile(path.join(root,'src/LiveCG.Core/Browser/player.js'),path.join(folder,'player.js'));
@@ -74,7 +76,7 @@ if(${mixedEntrance}){
 return pixels.every((value,index)=>value===live[index]);}`:'function originalPrice(){return null;}';
 const probe=html.replace('</body>',`<script>${priceProbe}
 setInterval(()=>{if(window.LiveCG)console.error("[OBS-PROBE] "+JSON.stringify({...LiveCG.status(),probe:"transition",source:location.pathname.split("/").at(-1),originalPrice:originalPrice()}))},100);
-window.addEventListener("ProbeSeek",e=>LiveCG.renderAt(e.detail.time));</script></body>`);if(linkedMode)await fs.writeFile(updateFixture.entry,probe);else await fs.writeFile(path.join(folder,'obs-probe.html'),probe);
+window.addEventListener("ProbeSeek",e=>LiveCG.renderAt(e.detail.time));</script></body>`);if(linkedMode)await fs.writeFile(updateFixture.entry,probe);else if(!newEffects)await fs.writeFile(path.join(folder,'obs-probe.html'),probe);
 const child=spawn(path.join(portable,'bin/64bit/obs64.exe'),['--portable','--multi','--disable-updater','--disable-missing-files-check','--disable-shutdown-check','--minimize-to-tray'],{cwd:path.join(portable,'bin/64bit'),windowsHide:true,stdio:'ignore'});
 let ws,seq=0;const pending=new Map();let logFile;const renderCaptures=[];
 function request(requestType,requestData={}){return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(new Error('OBS timeout '+requestType));},7000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({op:6,d:{requestType,requestId:id,requestData}}));});}
@@ -117,7 +119,7 @@ async function verifyBroadcastUpdates(){
  const restarted=await waitLast(state=>state.programActive===true&&!state.waitingForProgram);
  check(restarted.time<.6,"actual OBS program switch restarts the loaded revision"); let expectedRevision=fixture.second.Revision;
  if(linkedMode){
-  const refreshed=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Debug/net10.0/LiveCG.Verify.dll"),root,"--linked-refresh"],{encoding:"utf8",windowsHide:true});
+  const refreshed=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Release/net10.0/LiveCG.Verify.dll"),root,"--linked-refresh"],{encoding:"utf8",windowsHide:true});
   if(refreshed.status!==0)throw new Error(refreshed.stderr+" "+refreshed.stdout);
   const saved=JSON.parse(refreshed.stdout);expectedRevision=saved.revision;
   check(saved.entry===fixture.entry&&expectedRevision!==fixture.first.Revision,"real save-refresh keeps the registered index path while OBS is active");
@@ -131,7 +133,7 @@ async function verifyBroadcastUpdates(){
  const shot=await request("GetSourceScreenshot",{sourceName:"Live Updates",imageFormat:"png",imageWidth:160,imageHeight:100});
  const actual=path.join(folder,"actual-obs-update.png");
  await fs.writeFile(actual,Buffer.from(shot.imageData.split(",")[1],"base64"));
- const pixels=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Debug/net10.0/LiveCG.Verify.dll"),root,"--broadcast-pixel",actual],{encoding:"utf8",windowsHide:true});
+ const pixels=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Release/net10.0/LiveCG.Verify.dll"),root,"--broadcast-pixel",actual],{encoding:"utf8",windowsHide:true});
  check(pixels.status===0,"actual OBS displays the replacement blue image pixels");
  if(linkedMode){
   let scenePath;
@@ -144,7 +146,7 @@ async function verifyBroadcastUpdates(){
    if(!scenePath)await sleep(100);
   }
   if(!scenePath)throw new Error("Actual OBS scene was not saved");
-  const relocated=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Debug/net10.0/LiveCG.Verify.dll"),root,"--linked-scene",scenePath],{encoding:"utf8",windowsHide:true});
+  const relocated=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Release/net10.0/LiveCG.Verify.dll"),root,"--linked-scene",scenePath],{encoding:"utf8",windowsHide:true});
   if(relocated.status!==0)throw new Error(relocated.stderr+" "+relocated.stdout);
   const migration=JSON.parse(relocated.stdout);
   check(migration.changed>0,"actual OBS scene JSON reconnects the browser path after relocation");
@@ -153,7 +155,7 @@ async function verifyBroadcastUpdates(){
   const migratedShot=await request("GetSourceScreenshot",{sourceName:"Live Updates",imageFormat:"png",imageWidth:160,imageHeight:100});
   const migratedPng=path.join(folder,"actual-obs-relocated.png");
   await fs.writeFile(migratedPng,Buffer.from(migratedShot.imageData.split(",")[1],"base64"));
-  const migratedPixels=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Debug/net10.0/LiveCG.Verify.dll"),root,"--broadcast-pixel",migratedPng],{encoding:"utf8",windowsHide:true});
+  const migratedPixels=spawnSync(path.join(root,".tools/dotnet/dotnet.exe"),[path.join(root,"tests/LiveCG.Verify/bin/Release/net10.0/LiveCG.Verify.dll"),root,"--broadcast-pixel",migratedPng],{encoding:"utf8",windowsHide:true});
   check(migratedPixels.status===0,"actual OBS renders the rebound scene from the moved folder");
  }
 }
@@ -306,9 +308,45 @@ async function verifyBlurFocus(){
     testSource='obs-probe.html';await ready(s=>settled(0,s));
     check(true,'one key advances both browsers when both are on program');
 }
+async function verifyNewEffects(version){
+    const {width,height,frames,cases}=JSON.parse(await fs.readFile(path.join(effectsFixture,'fixture.json'),'utf8'));
+    const scene='LiveCG NEW '+Date.now();
+    await request('CreateSceneCollection',{sceneCollectionName:scene});
+    await request('CreateScene',{sceneName:scene});
+    await request('SetCurrentProgramScene',{sceneName:scene});
+    for(const frame of frames){
+        const label='LiveCG NEW '+frame, marker='[LIVE-CG-NEW-'+frame+']';
+        const filename=path.join(folder,'obs-'+version+'-'+frame+'.html');
+        await fs.writeFile(filename,html.replace('</body>',`<script>
+            let sent=false;setInterval(()=>{
+                if(!window.LiveCG?.status().loaded)return;
+                LiveCG.renderAt(${frame}/30);
+                if(!sent){sent=true;console.error(${JSON.stringify(marker)});}
+            },33);
+        </script></body>`));
+        await request('CreateInput',{sceneName:scene,inputName:label,inputKind:'browser_source',
+            inputSettings:{is_local_file:true,local_file:filename,width,height,fps_custom:true,fps:30,shutdown:false,restart_when_active:false}});
+        for(let i=0;i<120;i++){
+            await samples().catch(()=>[]);
+            if(logFile && (await fs.readFile(logFile,'utf8')).includes(marker))break;
+            if(i===119)throw new Error('New effect fixture failed to render: '+marker);
+            await sleep(100);
+        }
+        await sleep(200);
+        const shot=await request('GetSourceScreenshot',{sourceName:label,imageFormat:'png',imageWidth:width,imageHeight:height});
+        const png=path.join(effectsFixture,'obs-'+version+'-'+frame+'.png');
+        await fs.writeFile(png,Buffer.from(shot.imageData.split(',')[1],'base64'));
+        const checkImage=spawnSync(path.join(root,'.tools/dotnet/dotnet.exe'),
+            [path.join(root,'tests/LiveCG.Verify/bin/Release/net10.0/LiveCG.Verify.dll'),root,'--new-effects-compare',png,String(frame),'premultiplied'],
+            {encoding:'utf8',windowsHide:true});
+        if(checkImage.status!==0)console.log(checkImage.stdout.split(/\r?\n/).filter(line=>line.startsWith('FAIL')).join('\n'),checkImage.stderr);
+        check(checkImage.status===0,'all '+cases+' effects and presets match the native frame within tolerance · OBS '+version+' · frame '+frame);
+        await request('RemoveInput',{inputName:label});
+    }
+}
 try{
-    await connect();let version;for(let i=0;i<150;i++){try{version=await request('GetVersion');break;}catch(error){if(!error.message.includes('207'))throw error;await sleep(100);}}if(!version)throw new Error('OBS frontend initialization did not finish');check((blurFocus?/^(32|33)\./.test(version.obsVersion):version.obsVersion.startsWith('33.')),'isolated actual OBS '+version.obsVersion+' started with test-only profile');
-    if(blurFocus){await verifyBlurFocus();}else if(updateMode){await verifyBroadcastUpdates();}else{
+    await connect();let version;for(let i=0;i<150;i++){try{version=await request('GetVersion');break;}catch(error){if(!error.message.includes('207'))throw error;await sleep(100);}}if(!version)throw new Error('OBS frontend initialization did not finish');check((blurFocus||newEffects?/^(32|33)\./.test(version.obsVersion):version.obsVersion.startsWith('33.')),'isolated actual OBS '+version.obsVersion+' started with test-only profile');
+    if(newEffects){await verifyNewEffects(version.obsVersion);}else if(blurFocus){await verifyBlurFocus();}else if(updateMode){await verifyBroadcastUpdates();}else{
     await request('CreateSceneCollection',{sceneCollectionName:'LiveCGProbe-'+Date.now()});
     for(const sceneName of ['LiveCG Blank','LiveCG Browser'])await request('CreateScene',{sceneName});
     const mode=await request('GetStudioModeEnabled');if(!mode.studioModeEnabled)await request('SetStudioModeEnabled',{studioModeEnabled:true});await request('SetCurrentProgramScene',{sceneName:'LiveCG Blank'});
@@ -380,5 +418,5 @@ try{
     let restReady=false;for(let i=0;i<100;i++){if((await fs.readFile(logFile,'utf8')).includes('[V1-REST]')){restReady=true;break;}await sleep(100);}check(restReady,'actual OBS loads named-entry package and reaches the rest phase');await sleep(150);
     const restShot=await request('GetSourceScreenshot',{sourceName:'V1 Original Rest',imageFormat:'png',imageWidth:160,imageHeight:100}),restActual=path.join(restDir,'actual-obs-rest.png');await fs.writeFile(restActual,Buffer.from(restShot.imageData.split(',')[1],'base64'));renderCaptures.push({package:'Actual OBS v1 original rest',premultiplied:true,time:1.8,expected:path.join(restDir,'original.png'),actual:restActual});check(restShot.imageData.startsWith('data:image/png;base64,'),'actual OBS rest captured for exact source comparison');
 }}}catch(error){check(false,error.stack);}
-finally{if(ws)ws.close();await fs.writeFile(path.join(root,'artifacts/v010-obs-results.json'),JSON.stringify({passed:results.filter(r=>r.ok).length,total:results.length,log:logFile,results},null,2));await fs.writeFile(path.join(root,'artifacts/v010-obs-render-captures.json'),JSON.stringify(renderCaptures,null,2));child.kill();}
+finally{if(ws)ws.close();await fs.writeFile(path.join(root,newEffects?'artifacts/v160-obs-'+port+'.json':'artifacts/v010-obs-results.json'),JSON.stringify({passed:results.filter(r=>r.ok).length,total:results.length,log:logFile,results},null,2));if(!newEffects)await fs.writeFile(path.join(root,'artifacts/v010-obs-render-captures.json'),JSON.stringify(renderCaptures,null,2));child.kill();}
 console.log(`RESULT ${results.filter(r=>r.ok).length}/${results.length} passed`);process.exitCode=results.some(r=>!r.ok)?1:0;

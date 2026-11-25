@@ -1,0 +1,38 @@
+{
+  "SchemaVersion": 1,
+  "Id": "9b613df0-e477-4f10-849d-4bc7bb0ddf08",
+  "Name": "금속 광택",
+  "Category": "배너 모션 샘플 추가",
+  "Description": "금빛 광택과 테두리 빛이 겹쳐 흐릅니다.",
+  "Favorite": false,
+  "IsNew": true,
+  "ThumbnailPng": "",
+  "Clips": [
+    {
+      "Start": 0,
+      "Duration": 1.3,
+      "Options": {
+        "Kind": "Sweep",
+        "Strength": "Medium",
+        "Speed": 1,
+        "Color": "#FFE08A"
+      },
+      "Enabled": true,
+      "Loop": false,
+      "LoopPeriod": 1
+    },
+    {
+      "Start": 0.18,
+      "Duration": 1.25,
+      "Options": {
+        "Kind": "Border",
+        "Strength": "Medium",
+        "Speed": 1,
+        "Color": "#FFC14E"
+      },
+      "Enabled": true,
+      "Loop": false,
+      "LoopPeriod": 1
+    }
+  ]
+}
