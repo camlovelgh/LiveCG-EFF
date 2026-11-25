@@ -133,10 +133,12 @@ public partial class MainWindow
             return true;
         }
         if(!_editor.ShortcutsEnabled||(modifiers!=ModifierKeys.None&&modifiers!=ModifierKeys.Shift)||_current is null)return false;
-        if(focus is TimelineControl && modifiers==ModifierKeys.None && key is Key.Left or Key.Right)
+        if(focus is TimelineControl && key is Key.Left or Key.Right)
         {
             var clips=TimelineEditor.SelectedClips.Select(item=>item.Clip).ToList();
-            var delta=(key==Key.Left?-1d:1d)/_video.Fps;
+            if(modifiers==ModifierKeys.Shift&&clips.Count==0)return false;
+            var frames=modifiers==ModifierKeys.Shift?10:1;
+            var delta=(key==Key.Left?-1d:1d)*frames/_video.Fps;
             if(clips.Count>0)
             {
                 if(!CommitClip(true))return false;

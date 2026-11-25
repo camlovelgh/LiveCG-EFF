@@ -194,10 +194,9 @@ internal static class Program
             var added=Control<System.Windows.Controls.Primitives.UniformGrid>(window,"NewEffectsGrid").Children.OfType<EffectThumbnail>().ToList();
             Check(basic.Count==18&&basic.All(thumb=>!ProductInfo.IsRetiredEffect(thumb.Kind)&&!ProductInfo.IsNewEffect(thumb.Kind)),"basic tab excludes retired and new effects");
             Check(added.Count==27&&added.All(thumb=>ProductInfo.IsNewEffect(thumb.Kind)),"NEW tab contains all new thumbnail effects");
-            var newSearch=Control<TextBox>(window,"NewEffectSearch");
-            newSearch.Text="타자기";Pump();
-            Check(added.Count(thumb=>thumb.Visibility==Visibility.Visible)==1&&basic.All(thumb=>thumb.Visibility==Visibility.Visible),"new-effect search is independent of basic effects");
-            newSearch.Text="";Pump();
+            Check(window.FindName("EffectSearchBox") is null&&window.FindName("EffectCategoryBox") is null&&
+                window.FindName("NewEffectSearch") is null&&window.FindName("NewEffectCategory") is null,
+                "built-in and new effect tabs have no search or category controls");
             Check(Control<ItemsControl>(window,"BundledPresets").Items.Count==9,"NEW tab includes built-in editable presets");
             Check(typeof(MainWindow).GetMethod("Redetect",BindingFlags.NonPublic|BindingFlags.Instance) is null,"automatic detection UI handler removed");
             Check(Control<ComboBox>(window,"FpsBox").Text=="60","saved default fps restored");

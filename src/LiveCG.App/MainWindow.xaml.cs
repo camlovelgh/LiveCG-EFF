@@ -47,11 +47,10 @@ public partial class MainWindow : Window
         Choices(EndHoldBox,["0","0.5","1","2","3"]);Choices(ClipDurationBox,["0.5","0.8","1","1.5","2","3","5"]);
         Choices(EffectSpeedBox,["0.25","0.5","1","1.5","2","4"]);Choices(StrengthBox,ProductInfo.Strengths.Select(ProductInfo.StrengthName).ToArray());
         Choices(BackgroundBox,["테두리색 추정","투명","직접 색상","원본 유지"]);
-        Choices(EffectCategoryBox,["전체","등장","반복","꾸미기"]);EffectCategoryBox.SelectedIndex=0;
-        Choices(NewEffectCategory,["전체","등장","반복","꾸미기"]);NewEffectCategory.SelectedIndex=0;
         foreach(var kind in ProductInfo.SelectableEffects.Where(k=>k!=EffectKind.UserMotion))
         {
             var thumbnail=new EffectThumbnail(kind);thumbnail.MouseLeftButtonDown+=(_,_)=>SelectEffect(kind);
+            thumbnail.ContextMenu=CreateFavoriteMenu(new(ProductInfo.EffectName(kind),Kind:kind));
             _thumbnails.Add(thumbnail);(ProductInfo.IsNewEffect(kind)?NewEffectsGrid:EffectsGrid).Children.Add(thumbnail);
         }
         Preview.RegionSelected+=region=>SelectRegion(region);

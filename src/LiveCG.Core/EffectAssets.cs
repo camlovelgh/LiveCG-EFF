@@ -3,6 +3,15 @@ using System.Text.Json.Serialization;
 
 namespace LiveCG.Core;
 
+public sealed record EffectFavorites(HashSet<EffectKind> Effects, HashSet<Guid> Presets)
+{
+    public void Validate()
+    {
+        if(Effects is null||Presets is null||Effects.Any(kind=>!Enum.IsDefined(kind))||Presets.Contains(Guid.Empty))
+            throw new InvalidDataException("즐겨찾기 설정 형식을 확인하세요.");
+    }
+}
+
 public class EffectAsset
 {
     public int SchemaVersion { get; set; }=1;

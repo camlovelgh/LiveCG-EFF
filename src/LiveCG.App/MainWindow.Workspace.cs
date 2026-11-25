@@ -23,7 +23,7 @@ public partial class MainWindow
     public Window? DetachedEffectsWindow=>_effectsWindow;
     private void InitializeWorkspace()
     {
-        Preview.ColorPicked+=color=>{if(_pickingEffectColor){_pickingEffectColor=false;SetEffectColor(color);}else SetBackgroundColor(color);};AddFileMenu();RefreshAssets();
+        Preview.ColorPicked+=color=>{if(_pickingEffectColor){_pickingEffectColor=false;SetEffectColor(color);}else SetBackgroundColor(color);};AddFileMenu();LoadFavoriteSettings();RefreshAssets();
         Loaded+=(_,_)=>
         {
             if(Environment.GetEnvironmentVariable("LIVECG_DISABLE_WORKSPACE_RESTORE")=="1"){_workspaceReady=true;return;}
@@ -159,50 +159,15 @@ public partial class MainWindow
         _assets=AssetStore.List(out var errors);
         _bundledEffects=AssetStore.ListBundled(out var bundledErrors);
         FilterAssetSearch(this,new TextChangedEventArgs(TextBox.TextChangedEvent,UndoAction.None));
-        ApplyEffectFilters();
-        FilterNewEffects(this,new RoutedEventArgs());
+        BundledPresets.ItemsSource=_bundledEffects;
+        BundledPresetTitle.Visibility=_bundledEffects.Count>0?Visibility.Visible:Visibility.Collapsed;
+        RefreshFavorites();
         errors.AddRange(bundledErrors);
         if(errors.Count>0)Notify("일부 효과 파일을 건너뛰었습니다 · "+errors[0]);
         else if(announce)Notify("효과 목록을 다시 불러왔습니다.");
     }
     private void OpenAssetFolder(object sender,RoutedEventArgs e){try{Directory.CreateDirectory(AssetStore.DirectoryPath);Process.Start(new ProcessStartInfo{FileName=AssetStore.DirectoryPath,UseShellExecute=true});}catch(Exception ex){Error(ex);}}
     private void ReloadAssets(object sender,RoutedEventArgs e)=>RefreshAssets(true);
-    private void FilterEffects(object sender,TextChangedEventArgs e)=>ApplyEffectFilters();
-    private void EffectCategoryChanged(object sender,SelectionChangedEventArgs e)=>ApplyEffectFilters();
-    private void ApplyEffectFilters()
-    {
-        if(EffectSearchBox is null||EffectCategoryBox is null||EffectsGrid is null)return;
-        var visible=FilterThumbnails(EffectsGrid, EffectSearchBox.Text.Trim(), EffectCategoryBox.SelectedIndex);
-        EffectCountText.Text=$"{visible} / {EffectsGrid.Children.Count}개";
-        EffectFilterEmpty.Visibility=visible==0?Visibility.Visible:Visibility.Collapsed;
-    }
-    private static bool MatchesCategory(EffectKind kind,int category)=>category switch
-    {
-        1=>ProductInfo.IsEntrance(kind), 2=>ProductInfo.NeedsLayer(kind)&&!ProductInfo.IsEntrance(kind),
-        3=>!ProductInfo.NeedsLayer(kind), _=>true
-    };
-    private static int FilterThumbnails(System.Windows.Controls.Primitives.UniformGrid grid,string query,int category)
-    {
-        var visible=0;
-        foreach(var thumbnail in grid.Children.OfType<EffectThumbnail>())
-        {
-            var matches=MatchesCategory(thumbnail.Kind,category)&&ProductInfo.EffectName(thumbnail.Kind).Contains(query,StringComparison.OrdinalIgnoreCase);
-            thumbnail.Visibility=matches?Visibility.Visible:Visibility.Collapsed;
-            if(matches)visible++;
-        }
-        return visible;
-    }
-    private void FilterNewEffects(object sender,RoutedEventArgs e)
-    {
-        if(NewEffectsGrid is null||NewEffectCount is null||BundledPresets is null||NewEffectCategory is null)return;
-        var query=NewEffectSearch.Text.Trim();var category=NewEffectCategory.SelectedIndex;
-        var visible=FilterThumbnails(NewEffectsGrid,query,category);
-        var presets=_bundledEffects.Where(asset=>asset.Name.Contains(query,StringComparison.OrdinalIgnoreCase)
-            &&asset.Clips.Any(clip=>MatchesCategory(clip.Options.Kind,category))).ToList();
-        BundledPresets.ItemsSource=presets;
-        BundledPresetTitle.Visibility=presets.Count>0?Visibility.Visible:Visibility.Collapsed;
-        NewEffectCount.Text=visible+presets.Count==0?"검색 조건에 맞는 효과가 없습니다.":$"효과 {visible}개 · 프리셋 {presets.Count}개";
-    }
     private void InsertBundledPreset(object sender,RoutedEventArgs e)
     {if(sender is Button { Tag: EffectAsset asset })PlaceBundledPreset(asset,false);}
     private void ReplaceBundledPreset(object sender,RoutedEventArgs e)
@@ -298,7 +263,7 @@ public partial class MainWindow
     }
     private void DuplicateAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{var copy=asset.Copy(true);copy.Name+=" 복사";copy.IsNew=true;AssetStore.Save(copy);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void DeleteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;if(MessageBox.Show(this,"내 효과 ‘"+asset.Name+"’를 보관함에서 삭제할까요?","에셋 삭제",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;try{AssetStore.Remove(asset.Id);RefreshAssets();}catch(Exception ex){Error(ex);}}
-    private void FavoriteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;asset.Favorite=!asset.Favorite;AssetStore.Save(asset);RefreshAssets();}
+    private void FavoriteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is { } asset)SetFavorite(new(asset.Name,Asset:asset),!asset.Favorite);}
     private void ImportAsset(object sender,RoutedEventArgs e){if(_busy)return;var dialog=new OpenFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json;*.json",Multiselect=true};if(dialog.ShowDialog(this)==true)try{foreach(var path in dialog.FileNames)AssetStore.Import(path);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void ExportAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{Directory.CreateDirectory(AssetStore.DirectoryPath);var dialog=new SaveFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json",InitialDirectory=AssetStore.DirectoryPath,FileName=string.Concat(asset.Name.Select(c=>Path.GetInvalidFileNameChars().Contains(c)?'_':c))};if(dialog.ShowDialog(this)==true){DocumentStore.Save(dialog.FileName,asset);RefreshAssets();}}catch(Exception ex){Error(ex);}}
 }

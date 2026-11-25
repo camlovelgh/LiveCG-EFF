@@ -194,10 +194,7 @@
    <TabControl.Template><ControlTemplate TargetType="TabControl"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><ItemsPresenter/><Border Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="3"><ContentPresenter ContentSource="SelectedContent"/></Border></Grid></ControlTemplate></TabControl.Template>
    <TabItem Header="기본 효과" Width="Auto" Grid.ColumnSpan="2">
     <DockPanel>
-     <StackPanel DockPanel.Dock="Top"><TextBox x:Name="EffectSearchBox" ToolTip="기본 효과 검색" TextChanged="FilterEffects"/>
-      <ComboBox x:Name="EffectCategoryBox" SelectionChanged="EffectCategoryChanged" ToolTip="효과 분류"/>
-      <TextBlock x:Name="EffectCountText" Foreground="#9AB7C7" Margin="4,2"/>
-      <TextBlock x:Name="EffectFilterEmpty" Text="검색 조건에 맞는 효과가 없습니다." Foreground="#E7D8A2" Visibility="Collapsed"/>
+     <StackPanel DockPanel.Dock="Top">
       <Button Content="순차 블러 강조" Click="EditBlurFocus" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" ToolTip="블러 영역, 강조 순서와 전환 미리보기"/>
       <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
       <TextBlock Text="썸네일로 선택 효과 변경 · ＋로 새 효과 추가" TextWrapping="Wrap" Foreground="#A7BBC9" FontSize="10" Margin="4"/>
@@ -207,16 +204,14 @@
    <TabItem Header="NEW 효과" Width="Auto" Grid.Column="2" Grid.ColumnSpan="2">
     <DockPanel>
      <StackPanel DockPanel.Dock="Top">
-      <TextBox x:Name="NewEffectSearch" ToolTip="새 효과와 프리셋 검색" TextChanged="FilterNewEffects"/>
-      <ComboBox x:Name="NewEffectCategory" SelectionChanged="FilterNewEffects" ToolTip="새 효과 분류"/>
-      <TextBlock x:Name="NewEffectCount" Foreground="#9AB7C7" Margin="4,2"/>
       <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
      </StackPanel>
      <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
       <UniformGrid x:Name="NewEffectsGrid" Columns="3"/>
       <TextBlock x:Name="BundledPresetTitle" Text="모션 프리셋" Foreground="#9AB7C7" Margin="4,8,4,3"/>
       <ItemsControl x:Name="BundledPresets"><ItemsControl.ItemTemplate><DataTemplate>
-       <Border BorderBrush="#263D4C" BorderThickness="0,0,0,1" Padding="4,4,4,5">
+       <Border BorderBrush="#263D4C" BorderThickness="0,0,0,1" Padding="4,4,4,5" Background="Transparent"
+               ContextMenuOpening="OpenAssetFavoriteMenu" Tag="Bundled"><Border.ContextMenu><ContextMenu/></Border.ContextMenu>
         <StackPanel>
          <TextBlock Text="{Binding Name}" TextWrapping="Wrap"/>
          <WrapPanel>
@@ -252,13 +247,39 @@
      </Expander>
     </StackPanel></ScrollViewer>
    </TabItem>
-   <TabItem Header="내 효과" Width="Auto" Grid.Row="1" Grid.ColumnSpan="3">
+   <TabItem Header="내 효과" Width="Auto" Grid.Row="1" Grid.ColumnSpan="2">
     <DockPanel><StackPanel DockPanel.Dock="Top"><TextBlock Text="내 모션 / 조합 에셋" Margin="4,8" Foreground="#BDADD9"/><TextBox x:Name="AssetSearchBox" ToolTip="내 효과 이름 / 분류 검색" TextChanged="FilterAssetSearch"/>
      <WrapPanel><Button Content="새 모션" Click="NewMotionAsset"/><Button Content="조합 저장" Click="SaveEffectCombo"/><Button Content="삽입" Click="InsertAsset"/><Button Content="편집" Click="EditAsset"/><Button Content="효과 폴더" Click="OpenAssetFolder"/><Button Content="새로고침" Click="ReloadAssets"/></WrapPanel>
      <Expander Header="에셋 관리 · 가져오기 / 내보내기" Foreground="#BBAFD0"><WrapPanel><Button Content="업데이트" Click="UpdateAssetClip"/><Button Content="복제" Click="DuplicateAsset"/><Button Content="삭제" Click="DeleteAsset"/><Button Content="가져오기" Click="ImportAsset"/><Button Content="내보내기" Click="ExportAsset"/><Button Content="★" Click="FavoriteAsset"/></WrapPanel></Expander>
-    </StackPanel><ListBox x:Name="AssetList" MouseDoubleClick="InsertAsset"><ListBox.ItemTemplate><DataTemplate><StackPanel><local:AssetPreview Asset="{Binding}"/><TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/><TextBlock Text="{Binding Category}" Foreground="#93AABA" FontSize="10"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel>
+    </StackPanel><ListBox x:Name="AssetList" MouseDoubleClick="InsertAsset"><ListBox.ItemTemplate><DataTemplate>
+     <StackPanel Background="Transparent" ContextMenuOpening="OpenAssetFavoriteMenu"><StackPanel.ContextMenu><ContextMenu/></StackPanel.ContextMenu>
+      <local:AssetPreview Asset="{Binding}"/><TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/><TextBlock Text="{Binding Category}" Foreground="#93AABA" FontSize="10"/>
+     </StackPanel>
+    </DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel>
    </TabItem>
-   <TabItem x:Name="GroupsTab" Header="그룹·마스크" Width="Auto" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3">
+   <TabItem Header="즐겨찾기" Width="Auto" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2">
+    <DockPanel>
+     <Expander DockPanel.Dock="Top" Header="＋ 즐겨찾기에 넣을 효과 선택" Foreground="#9EDCCB" Margin="3" Padding="4">
+      <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto">
+       <ItemsControl x:Name="FavoriteChoices"><ItemsControl.ItemTemplate><DataTemplate>
+        <CheckBox Content="{Binding Entry.Name}" IsChecked="{Binding Added,Mode=OneWay}" Tag="{Binding Entry}" Click="ChangeFavoriteChoice" Margin="4,2"/>
+       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </ScrollViewer>
+     </Expander>
+     <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+       <TextBlock x:Name="FavoriteEmpty" Text="즐겨찾기에 넣은 효과가 여기에 표시됩니다." TextWrapping="Wrap" Foreground="#9AB7C7" Margin="6"/>
+       <ItemsControl x:Name="FavoriteList"><ItemsControl.ItemTemplate><DataTemplate>
+        <DockPanel Margin="2">
+         <Button DockPanel.Dock="Right" Content="제거" Tag="{Binding}" Click="RemoveFavorite" ToolTip="즐겨찾기에서 제거"/>
+         <Button Content="{Binding Name}" Tag="{Binding}" Click="ApplyFavorite" HorizontalContentAlignment="Left" ToolTip="클릭하여 선택 영역에 적용"/>
+        </DockPanel>
+       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </StackPanel>
+     </ScrollViewer>
+    </DockPanel>
+   </TabItem>
+   <TabItem x:Name="GroupsTab" Header="그룹·마스크" Width="Auto" Grid.Row="1" Grid.Column="4" Grid.ColumnSpan="2">
     <TabControl x:Name="GroupMaskTabs" Background="#14202D" Foreground="#DFE7EE" BorderBrush="#354A5C" Margin="0,6,0,0">
      <TabItem Header="그룹 구조"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
       <TextBlock x:Name="GroupRelationText" TextWrapping="Wrap" Foreground="#7BEAC4" Margin="4,8"/>

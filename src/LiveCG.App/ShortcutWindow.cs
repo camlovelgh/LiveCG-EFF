@@ -20,7 +20,7 @@ public sealed class ShortcutWindow:Window
             foreach(var letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ")box.Items.Add(letter.ToString());box.SelectedItem=selected;panel.Children.Add(box);return box;
         }
         var draw=Choice("새 영역 그리기",source.DrawKey);var select=Choice("영역 선택 모드",source.SelectKey);
-        panel.Children.Add(new TextBlock{Text="Tab / Shift+Tab: 미리보기·타임라인에서 다음/이전 영역\n1~9: 해당 번호 영역 선택\nCtrl+C/V: 클립 복사/붙여넣기\nCtrl+Z / Ctrl+Shift+Z: 되돌리기/다시 실행\n텍스트 입력 중에는 문서 편집 단축키를 유지합니다.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(4,12,0,5)});
+        panel.Children.Add(new TextBlock{Text="Tab / Shift+Tab: 미리보기·타임라인에서 다음/이전 영역\n1~9: 해당 번호 영역 선택\n← / →: 클립 1프레임 이동\nShift+← / →: 클립 10프레임 이동\nCtrl+C/V: 클립 복사/붙여넣기\nCtrl+Z / Ctrl+Shift+Z: 되돌리기/다시 실행\n텍스트 입력 중에는 문서 편집 단축키를 유지합니다.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(4,12,0,5)});
         var apply=new Button{Content="적용",HorizontalAlignment=HorizontalAlignment.Right};panel.Children.Add(apply);
         apply.Click+=(_,_)=>
         {
