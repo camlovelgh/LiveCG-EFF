@@ -1,16 +1,18 @@
+param([switch]$StartupDiagnostics,[string]$OutputDirectory)
+
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'bootstrap.ps1')
 $taskVersion = ([xml](Get-Content -LiteralPath (Join-Path $taskRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
-$taskBuildLabel = if ([string]::IsNullOrWhiteSpace($env:LIVECG_BUILD_LABEL)) { 'dev1' } else { $env:LIVECG_BUILD_LABEL }
-if ($taskBuildLabel -notmatch '^[A-Za-z0-9-]+$') { throw 'LIVECG_BUILD_LABEL may contain only letters, numbers, and hyphens.' }
-$taskPublish = Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-$taskBuildLabel-win-x64"
+$taskPackageName = "LiveCG-EFF-$taskVersion"
+if ($StartupDiagnostics) { $taskPackageName += '-startup-diagnostics' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $taskRoot 'dist' }
+$taskPublish = Join-Path $OutputDirectory $taskPackageName
 $taskAppFolder = Join-Path $taskPublish 'app'
 & (Join-Path $PSScriptRoot 'build-icon.ps1')
-& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true --disable-build-servers -m:1 -v minimal
+$taskBuildOptions = @()
+if ($StartupDiagnostics) { $taskBuildOptions += '-p:StartupDiagnostics=true' }
+& $taskSdk publish (Join-Path $taskRoot 'src\LiveCG.App\LiveCG.App.csproj') -c Release -r win-x64 --self-contained true -o $taskAppFolder --disable-build-servers -m:1 -v minimal @taskBuildOptions
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
-$taskPublishSource = Join-Path $taskRoot 'src\LiveCG.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish'
-New-Item -ItemType Directory -Path $taskAppFolder -Force | Out-Null
-Copy-Item -Path (Join-Path $taskPublishSource '*') -Destination $taskAppFolder -Recurse -Force
 $taskFfmpeg = Get-ChildItem -LiteralPath (Join-Path $taskRoot '.tools\ffmpeg') -Filter ffmpeg.exe -Recurse | Select-Object -First 1
 $taskVendor = Split-Path (Split-Path $taskFfmpeg.FullName -Parent) -Parent
 $taskDestination = Join-Path $taskAppFolder 'tools\ffmpeg'
@@ -19,6 +21,7 @@ Copy-Item -LiteralPath $taskFfmpeg.FullName -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $taskFfmpeg.DirectoryName 'ffprobe.exe') -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $taskVendor 'LICENSE'),(Join-Path $taskVendor 'README.txt') -Destination $taskDestination -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LiveCG-OBS-Hotkeys.lua') -Destination $taskPublish -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'InstallUpdate.ps1') -Destination $taskAppFolder -Force
 $taskGuide = Join-Path $taskPublish '사용안내'
 New-Item -ItemType Directory -Path $taskGuide -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $taskRoot 'README.md'),(Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $taskGuide -Force
@@ -53,5 +56,15 @@ app 폴더: 실행에 필요한 프로그램과 런타임입니다. 이동하거
 licenses 폴더: 외부 라이선스 원문입니다.
 다른 PC로 옮길 때는 이 폴더 전체를 복사하세요.
 "@ | Set-Content -LiteralPath (Join-Path $taskPublish '먼저 읽어주세요.txt') -Encoding utf8
-Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $taskRoot "dist\LiveCG-EFF-$taskVersion-$taskBuildLabel-win-x64.zip") -Force
+if ($StartupDiagnostics) {
+@'
+LiveCG-EFF 시작 진단 · SunjooAn
+
+ZIP 전체를 새 폴더에 풀고 최상단 LiveCG-EFF.exe를 실행하세요.
+오류가 재현되면 Win+R에서 %LOCALAPPDATA%\LiveCG-EFF\Diagnostics 를 열고
+방금 생성된 startup-*.log 파일 하나를 보내주세요.
+이 폴더가 비어 있으면 %TEMP%\LiveCG-EFF\Diagnostics 에서 확인하세요.
+'@ | Add-Content -LiteralPath (Join-Path $taskPublish '먼저 읽어주세요.txt') -Encoding utf8
+}
+Compress-Archive -LiteralPath $taskPublish -DestinationPath (Join-Path $OutputDirectory "$taskPackageName-win-x64.zip") -Force
 Write-Output "Ready: $(Join-Path $taskPublish 'LiveCG-EFF.exe')"

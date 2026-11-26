@@ -36,9 +36,6 @@
      <MenuItem Header="현재 옵션을 기본값으로 저장" Click="SaveDefaults"/><MenuItem Header="기본값 복원" Click="ResetDefaults"/>
      <MenuItem Header="단축키 설정" Click="ConfigureShortcuts"/><MenuItem Header="배치 초기화" Click="ResetWorkspace"/>
     </MenuItem>
-    <MenuItem Header="이전 방식">
-     <MenuItem Header="방송 갱신 ZIP 저장" Click="ExportBroadcastUpdates"/><MenuItem Header="방송 자료 관리" Click="OpenBroadcastManager"/>
-    </MenuItem>
    </Menu>
    <Button Content="도움말" Click="ShowHelp"/>  </StackPanel></ScrollViewer>
   <Grid Grid.Row="2" x:Name="EditorGrid">
@@ -64,7 +61,7 @@
       </DataTemplate></ListBox.ItemTemplate>
      </ListBox>
     </DockPanel>
-    <StackPanel Grid.Row="1"><Button Content="출력 설정 열기" Click="ShowFinalOutput" HorizontalAlignment="Left" Background="#246F5B" Foreground="White" FontWeight="Bold" ToolTip="출력 형식과 저장 위치를 확인합니다."/><Expander x:Name="OutputExpander" Header="출력 · 5단계" IsExpanded="False" Expanded="OutputPanelChanged" Collapsed="OutputPanelChanged" Foreground="#DFE7EE" Margin="0,8,0,0">
+    <StackPanel Grid.Row="1"><Button Content="출력 설정 열기" Click="ShowFinalOutput" Background="#246F5B" Foreground="White" HorizontalAlignment="Left"/><Expander x:Name="OutputExpander" Header="출력 설정 / 폴더" IsExpanded="False" Foreground="#DFE7EE" Margin="0,8,0,0">
      <ScrollViewer x:Name="OutputSettingsScroll" MaxHeight="430" VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,5,0,0">
       <StackPanel.Resources><Style x:Key="OutputHeader" TargetType="TextBlock"><Setter Property="Foreground" Value="#80D7C0"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Margin" Value="3,10,3,5"/></Style></StackPanel.Resources>
       <TextBlock Text="① 출력 방식" Style="{StaticResource OutputHeader}"/><ComboBox x:Name="OutputKindBox" SelectionChanged="OutputKindChanged"/>
@@ -85,7 +82,7 @@
       <WrapPanel><Button Content="폴더 선택" Click="ChooseOutput" Padding="8,6"/><Button Content="폴더 열기" Click="OpenOutputFolder" Padding="8,6"/><Button Content="OBS 파일 위치" Click="OpenBrowserEntry" Padding="8,6"/></WrapPanel>
       <Button Content="출력 예정 목록 확인" Click="ShowOutputPlan"/>
       <Separator Margin="3,7"/><TextBlock Text="⑤ 실행 · 진행" Style="{StaticResource OutputHeader}"/>
-      <WrapPanel><Button x:Name="RetryButton" Content="재시도" Click="RetryFailed" Padding="8,7"/><Button x:Name="ExportButton" Content="출력 설정 열기" Click="ExportFiles" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" Padding="10,7"/><Button x:Name="CancelButton" Content="취소" Click="CancelExport" IsEnabled="False" Padding="8,7"/></WrapPanel>
+      <WrapPanel><Button x:Name="RetryButton" Content="재시도" Click="RetryFailed" Padding="8,7"/><Button x:Name="ExportButton" Content="WebM 출력" Click="ExportFiles" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" Padding="10,7"/><Button x:Name="CancelButton" Content="취소" Click="CancelExport" IsEnabled="False" Padding="8,7"/></WrapPanel>
       <ProgressBar x:Name="ExportProgress" Height="10" Maximum="100" Background="#2B3F51" Foreground="{StaticResource AccentBrush}" BorderThickness="0" Margin="3,5"/>
       <TextBlock x:Name="ProgressText" Text="준비" Foreground="#93AABA" FontSize="10" Margin="3"/>
       <TextBlock Text="원본 크기 · 투명 · 무음" Foreground="#93AABA" FontSize="10" Margin="3,4"/>
@@ -137,17 +134,19 @@
      </StackPanel>
      <Grid>
       <local:PreviewControl x:Name="Preview"/>
-      <Border x:Name="StartGuidePanel" Background="#E6121E28" BorderBrush="#587B8A" BorderThickness="1" CornerRadius="10" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28" MaxWidth="600" Visibility="Visible">
-       <StackPanel HorizontalAlignment="Center" MaxWidth="520">
-        <TextBlock Text="LIVE COMMERCE · MOTION STUDIO" Foreground="#7FE9C5" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
-        <TextBlock Text="배너 이미지를 움직이는 CG로 만들어 보세요" FontSize="22" FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" Margin="0,9,0,7"/>
-        <TextBlock Text="이미지를 불러오거나 이 화면으로 끌어오면 편집을 시작할 수 있습니다." Foreground="#B7C8D3" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,18"/>
-        <Button Content="＋ 이미지 불러오기" Click="AddFiles" HorizontalAlignment="Center" Background="#246F5B" Foreground="White" FontSize="15" FontWeight="Bold" Padding="22,11"/>
-        <UniformGrid Columns="3" Margin="0,22,0,0">
-         <StackPanel Margin="8,0"><TextBlock Text="01  이미지" Foreground="#7FE9C5" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="불러오기" Foreground="#D5E0E7" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
-         <StackPanel Margin="8,0"><TextBlock Text="02  영역" Foreground="#7FE9C5" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="마우스로 지정" Foreground="#D5E0E7" HorizontalAlignment="Center" Margin="0,4,0,0"/></StackPanel>
-         <StackPanel Margin="8,0"><TextBlock Text="03  출력" Foreground="#7FE9C5" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="효과 미리보기·내보내기" Foreground="#D5E0E7" HorizontalAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
-        </UniformGrid>
+      <Border x:Name="StartGuide" HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="#E6121E28" BorderBrush="#587B8A" BorderThickness="1" CornerRadius="10"
+              Padding="20" Margin="10" MaxWidth="520">
+       <StackPanel>
+        <TextBlock Text="배너 이미지에 효과를 더해 보세요" Foreground="#E8F3FA" FontSize="21" FontWeight="Bold"
+                   TextAlignment="Center" TextWrapping="Wrap"/>
+        <TextBlock Text="이미지를 불러오거나 이곳으로 끌어오면 편집을 시작합니다."
+                   Foreground="#B7C8D3" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,12"/>
+        <Button x:Name="StartGuideImportButton" Content="＋ 이미지 불러오기" Click="AddFiles"
+                HorizontalAlignment="Center" Background="#246F5B" Foreground="White" FontSize="15"
+                FontWeight="Bold" Padding="18,8"/>
+        <TextBlock Text="이미지 불러오기 → 영역 지정 → 효과 미리보기·출력" Foreground="#9EDCCB"
+                   FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Margin="0,12,0,0"/>
        </StackPanel>
       </Border>
      </Grid>
@@ -181,21 +180,52 @@
   </Border>
   <GridSplitter x:Name="LayerHeightSplitter" Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#365467" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragStarted="PanelResizeStarted" DragCompleted="LayerHeightChanged" ToolTip="레이어 목록 높이 조절"/>
   <TabControl Grid.Row="3" x:Name="EffectsTabs" Background="#14202D" BorderBrush="#354A5C" Foreground="#DFE7EE" Padding="3" SelectionChanged="PropertyTabChanged">
-   <TabControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate></TabControl.ItemsPanel>
+   <TabControl.ItemsPanel>
+    <ItemsPanelTemplate>
+     <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+       <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+       <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+      </Grid.ColumnDefinitions>
+     </Grid>
+    </ItemsPanelTemplate>
+   </TabControl.ItemsPanel>
    <TabControl.Template><ControlTemplate TargetType="TabControl"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><ItemsPresenter/><Border Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="3"><ContentPresenter ContentSource="SelectedContent"/></Border></Grid></ControlTemplate></TabControl.Template>
-   <TabItem x:Name="BuiltInEffectsTab" Header="① 효과">
+   <TabItem Header="기본 효과" Width="Auto" Grid.ColumnSpan="2">
     <DockPanel>
-     <StackPanel DockPanel.Dock="Top"><TextBox x:Name="EffectSearchBox" Height="30" Margin="2,3" ToolTip="기본 효과 이름 검색" TextChanged="FilterEffects"/>
-      <ComboBox x:Name="EffectCategoryBox" Height="30" Margin="2,3" SelectionChanged="EffectCategoryChanged" ToolTip="기본 효과를 종류별로 보기"/>
-      <TextBlock x:Name="EffectCountText" Foreground="#9AB7C7" FontSize="10" Margin="4,2"/>
-      <TextBlock x:Name="EffectFilterEmpty" Text="조건에 맞는 효과가 없습니다." Foreground="#E7D8A2" TextWrapping="Wrap" Margin="4,2" Visibility="Collapsed"/>
+     <StackPanel DockPanel.Dock="Top">
       <Button Content="순차 블러 강조" Click="EditBlurFocus" Background="{StaticResource AccentBrush}" Foreground="#10241D" FontWeight="Bold" ToolTip="블러 영역, 강조 순서와 전환 미리보기"/>
       <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
       <TextBlock Text="썸네일로 선택 효과 변경 · ＋로 새 효과 추가" TextWrapping="Wrap" Foreground="#A7BBC9" FontSize="10" Margin="4"/>
      </StackPanel><ScrollViewer VerticalScrollBarVisibility="Auto"><UniformGrid x:Name="EffectsGrid" Columns="3"/></ScrollViewer>
     </DockPanel>
    </TabItem>
-   <TabItem Header="② 클립 속성">
+   <TabItem Header="NEW 효과" Width="Auto" Grid.Column="2" Grid.ColumnSpan="2">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top">
+      <WrapPanel><Button Content="→ 뒤에 추가" Background="#225A8F" Foreground="White" Click="AddClip"/><Button Content="◆ 커서에 추가" Background="#914612" Foreground="White" Click="AddClipAtCursor"/></WrapPanel>
+     </StackPanel>
+     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
+      <UniformGrid x:Name="NewEffectsGrid" Columns="3"/>
+      <TextBlock x:Name="BundledPresetTitle" Text="모션 프리셋" Foreground="#9AB7C7" Margin="4,8,4,3"/>
+      <ItemsControl x:Name="BundledPresets"><ItemsControl.ItemTemplate><DataTemplate>
+       <Border BorderBrush="#263D4C" BorderThickness="0,0,0,1" Padding="4,4,4,5" Background="Transparent"
+               ContextMenuOpening="OpenAssetFavoriteMenu" Tag="Bundled"><Border.ContextMenu><ContextMenu/></Border.ContextMenu>
+        <StackPanel>
+         <TextBlock Text="{Binding Name}" TextWrapping="Wrap"/>
+         <WrapPanel>
+          <Button Content="편집" Tag="{Binding}" Click="EditBundledPreset" ToolTip="프리셋을 열어 편집합니다."/>
+          <Button Content="클립 교체" Tag="{Binding}" Click="ReplaceBundledPreset" ToolTip="선택한 클립을 같은 시작 위치에서 이 프리셋으로 바꿉니다."/>
+          <Button Content="삽입" Tag="{Binding}" Click="InsertBundledPreset" ToolTip="선택한 효과 바로 뒤에 넣습니다. 선택이 없으면 영역 끝에 넣습니다."/>
+         </WrapPanel>
+        </StackPanel>
+       </Border>
+      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+     </StackPanel></ScrollViewer>
+    </DockPanel>
+   </TabItem>
+   <TabItem x:Name="ClipPropertiesTab" Header="클립 속성" Width="Auto" Grid.Column="4" Grid.ColumnSpan="2">
     <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel TextElement.Foreground="#DFE7EE">
      <TextBlock x:Name="EffectLabel" Foreground="#7BEAC3" FontWeight="Bold" TextWrapping="Wrap" Margin="4,8"/>
      <Expander x:Name="ClipBasicSection" Header="기본 · 강도 / 속도" IsExpanded="True" Foreground="#BFE5D7" Margin="3,6">
@@ -217,13 +247,39 @@
      </Expander>
     </StackPanel></ScrollViewer>
    </TabItem>
-   <TabItem Header="③ 내 효과">
+   <TabItem Header="내 효과" Width="Auto" Grid.Row="1" Grid.ColumnSpan="2">
     <DockPanel><StackPanel DockPanel.Dock="Top"><TextBlock Text="내 모션 / 조합 에셋" Margin="4,8" Foreground="#BDADD9"/><TextBox x:Name="AssetSearchBox" ToolTip="내 효과 이름 / 분류 검색" TextChanged="FilterAssetSearch"/>
-     <WrapPanel><Button Content="새 모션" Click="NewMotionAsset"/><Button Content="조합 저장" Click="SaveEffectCombo"/><Button Content="삽입" Click="InsertAsset"/><Button Content="편집" Click="EditAsset"/><Button Content="효과 폴더" ToolTip=".lcgeffect.json 파일을 넣고 저장하는 폴더를 엽니다." Click="OpenAssetFolder"/><Button Content="새로고침" ToolTip="효과 폴더를 다시 읽습니다." Click="ReloadAssets"/></WrapPanel>
+     <WrapPanel><Button Content="새 모션" Click="NewMotionAsset"/><Button Content="조합 저장" Click="SaveEffectCombo"/><Button Content="삽입" Click="InsertAsset"/><Button Content="편집" Click="EditAsset"/><Button Content="효과 폴더" Click="OpenAssetFolder"/><Button Content="새로고침" Click="ReloadAssets"/></WrapPanel>
      <Expander Header="에셋 관리 · 가져오기 / 내보내기" Foreground="#BBAFD0"><WrapPanel><Button Content="업데이트" Click="UpdateAssetClip"/><Button Content="복제" Click="DuplicateAsset"/><Button Content="삭제" Click="DeleteAsset"/><Button Content="가져오기" Click="ImportAsset"/><Button Content="내보내기" Click="ExportAsset"/><Button Content="★" Click="FavoriteAsset"/></WrapPanel></Expander>
-    </StackPanel><ListBox x:Name="AssetList" MouseDoubleClick="InsertAsset"><ListBox.ItemTemplate><DataTemplate><StackPanel><local:AssetPreview Asset="{Binding}"/><TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/><TextBlock Text="{Binding Category}" Foreground="#93AABA" FontSize="10"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel>
+    </StackPanel><ListBox x:Name="AssetList" MouseDoubleClick="InsertAsset"><ListBox.ItemTemplate><DataTemplate>
+     <StackPanel Background="Transparent" ContextMenuOpening="OpenAssetFavoriteMenu"><StackPanel.ContextMenu><ContextMenu/></StackPanel.ContextMenu>
+      <local:AssetPreview Asset="{Binding}"/><TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/><TextBlock Text="{Binding Category}" Foreground="#93AABA" FontSize="10"/>
+     </StackPanel>
+    </DataTemplate></ListBox.ItemTemplate></ListBox></DockPanel>
    </TabItem>
-   <TabItem Header="④ 그룹·마스크">
+   <TabItem Header="즐겨찾기" Width="Auto" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2">
+    <DockPanel>
+     <Expander DockPanel.Dock="Top" Header="＋ 즐겨찾기에 넣을 효과 선택" Foreground="#9EDCCB" Margin="3" Padding="4">
+      <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto">
+       <ItemsControl x:Name="FavoriteChoices"><ItemsControl.ItemTemplate><DataTemplate>
+        <CheckBox Content="{Binding Entry.Name}" IsChecked="{Binding Added,Mode=OneWay}" Tag="{Binding Entry}" Click="ChangeFavoriteChoice" Margin="4,2"/>
+       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </ScrollViewer>
+     </Expander>
+     <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+       <TextBlock x:Name="FavoriteEmpty" Text="즐겨찾기에 넣은 효과가 여기에 표시됩니다." TextWrapping="Wrap" Foreground="#9AB7C7" Margin="6"/>
+       <ItemsControl x:Name="FavoriteList"><ItemsControl.ItemTemplate><DataTemplate>
+        <DockPanel Margin="2">
+         <Button DockPanel.Dock="Right" Content="제거" Tag="{Binding}" Click="RemoveFavorite" ToolTip="즐겨찾기에서 제거"/>
+         <Button Content="{Binding Name}" Tag="{Binding}" Click="ApplyFavorite" HorizontalContentAlignment="Left" ToolTip="클릭하여 선택 영역에 적용"/>
+        </DockPanel>
+       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      </StackPanel>
+     </ScrollViewer>
+    </DockPanel>
+   </TabItem>
+   <TabItem x:Name="GroupsTab" Header="그룹·마스크" Width="Auto" Grid.Row="1" Grid.Column="4" Grid.ColumnSpan="2">
     <TabControl x:Name="GroupMaskTabs" Background="#14202D" Foreground="#DFE7EE" BorderBrush="#354A5C" Margin="0,6,0,0">
      <TabItem Header="그룹 구조"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
       <TextBlock x:Name="GroupRelationText" TextWrapping="Wrap" Foreground="#7BEAC4" Margin="4,8"/>
@@ -264,31 +320,24 @@
 </Border>
    </Grid>
    <GridSplitter x:Name="EffectsWidthSplitter" Grid.Column="3" Grid.RowSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#365467" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" IsEnabled="False" IsHitTestVisible="False" Focusable="False" ToolTip="내부 패널 너비 고정"/>
-   <GridSplitter x:Name="TimelineSplitter" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="8" Background="#365467" Cursor="SizeNS" ToolTip="드래그해 미리보기와 타임라인 높이를 조절합니다." ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" DragCompleted="TimelineSplitter_DragCompleted"/>
+   <GridSplitter x:Name="TimelineSplitter" IsEnabled="False" IsHitTestVisible="False" Focusable="False" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="5" Background="#263C4C" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"/>
    <Border x:Name="TimelinePanel" Grid.Row="2" Grid.Column="2" Background="{StaticResource PanelBrush}" CornerRadius="8" Padding="8">
     <DockPanel>
-     <Grid DockPanel.Dock="Top" Height="36" ToolTip="편집 도구 · 화살표 또는 마우스 휠로 이동">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions>
-      <Button Content="‹" Tag="TimelineEditToolbarScroll" Click="ScrollToolbarLeft" Padding="2" ToolTip="편집 도구 왼쪽으로"/>
-      <ScrollViewer x:Name="TimelineEditToolbarScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarMouseWheel"><StackPanel Orientation="Horizontal">
+     <ScrollViewer DockPanel.Dock="Top" Height="36" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarMouseWheel" ToolTip="도구줄은 마우스 휠로 좌우 이동"><StackPanel Orientation="Horizontal">
       <Button Content="복사" Click="CopyClip" ToolTip="Ctrl+C" Padding="7,5"/><Button Content="붙여넣기" Click="PasteClip" ToolTip="선택 영역의 현재 커서에 붙여넣기 · Ctrl+V" Padding="7,5"/>
       <Button x:Name="UndoButton" Content="되돌리기" Click="UndoEdit" ToolTip="Ctrl+Z" Padding="7,5"/><Button x:Name="RedoButton" Content="다시" Click="RedoEdit" ToolTip="Ctrl+Shift+Z" Padding="7,5"/>
       <CheckBox x:Name="SnapCheck" Content="스냅" IsChecked="True" ToolTip="시작·끝에 붙이기 / Alt로 임시 해제" Checked="EditorOptionsChanged" Unchecked="EditorOptionsChanged"/>
       <CheckBox x:Name="RippleCheck" Content="뒤 클립 함께 이동" IsChecked="True" Checked="EditorOptionsChanged" Unchecked="EditorOptionsChanged"/>
       <CheckBox x:Name="FollowMagnetCheck" Content="뒤 클립 자석" ToolTip="첫 뒤 클립을 새 끝에 붙이고 뒤 블록의 간격은 유지합니다." Checked="EditorOptionsChanged" Unchecked="EditorOptionsChanged"/>
       <Button Content="✂ 분할" Click="SplitClips" ToolTip="선택 효과를 현재 커서에서 나누기 · Ctrl+K" Padding="7,5"/>
-      </StackPanel></ScrollViewer>
-      <Button Grid.Column="2" Content="›" Tag="TimelineEditToolbarScroll" Click="ScrollToolbarRight" Padding="2" ToolTip="편집 도구 오른쪽으로"/>
-     </Grid>
+     </StackPanel></ScrollViewer>
      <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <Button Content="‹" Tag="PlaybackToolbarScroll" Click="ScrollToolbarLeft" Padding="2" ToolTip="재생 도구 왼쪽으로"/>
-      <ScrollViewer x:Name="PlaybackToolbarScroll" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarMouseWheel" ToolTip="재생·구간 도구 · 화살표 또는 마우스 휠로 이동"><StackPanel Orientation="Horizontal"><Button x:Name="PlayButton" Content="▶ 재생" Click="TogglePlayback" Padding="10,5"/><Button Content="처음" Click="Rewind" Padding="8,5"/>
-       <TextBlock x:Name="TimeText" Text="0.00 / 1.00초" Margin="8,0" Foreground="#B9D0DD"/>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarMouseWheel" ToolTip="재생·구간 도구줄 · 휠로 좌우 이동"><StackPanel Orientation="Horizontal"><Button x:Name="PlayButton" Content="▶ 재생" Click="TogglePlayback" Padding="10,5"/><Button Content="처음" Click="Rewind" Padding="8,5"/>
+       <TextBlock x:Name="TimeText" Margin="8,0" Foreground="#B9D0DD"/>
        <ComboBox x:Name="PlaybackViewBox" Width="145" SelectionChanged="PlaybackViewChanged"/><CheckBox x:Name="LoopPreviewCheck" Content="미리보기 반복" IsChecked="True"/><ComboBox x:Name="SectionModeBox" Width="140" SelectionChanged="SectionModeChanged"/><Button x:Name="SectionsButton" Content="구간 설정" Click="ConfigurePlayback" Padding="8,5"/><Button Content="반복 연결 확인" Click="CompareLoopEdges" Padding="8,5"/>
        <CheckBox x:Name="BroadcastPreviewCheck" Visibility="Collapsed" Content="방송 재생" ToolTip="등장 한 번 → 반복 구간 유지 → 퇴장 버튼 · 처음 버튼으로 재등장 준비" Checked="BroadcastModeChanged" Unchecked="BroadcastModeChanged"/><Button x:Name="ExitPlaybackButton" Content="퇴장" Click="ExitPlayback" Padding="8,5"/></StackPanel></ScrollViewer>
-      <Button Grid.Column="2" Content="›" Tag="PlaybackToolbarScroll" Click="ScrollToolbarRight" Padding="2" ToolTip="재생 도구 오른쪽으로"/>
-      <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top"><Button Content="−" Click="TimelineZoomOut" Padding="10,5"/><Button Content="＋" Click="TimelineZoomIn" Padding="10,5"/></StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button Content="−" Click="TimelineZoomOut" Padding="10,5"/><Button Content="＋" Click="TimelineZoomIn" Padding="10,5"/></StackPanel>
      </Grid>
      <ScrollViewer x:Name="TimelineScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" CanContentScroll="False"><local:TimelineControl x:Name="TimelineEditor"/></ScrollViewer>
     </DockPanel>

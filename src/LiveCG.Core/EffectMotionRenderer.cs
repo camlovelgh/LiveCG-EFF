@@ -6,6 +6,27 @@ internal static class EffectMotionRenderer
 {
     private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear);
 
+    public static bool IsRasterEffect(EffectKind kind)=>kind is EffectKind.Typewriter or EffectKind.Wave
+        or EffectKind.Fragments or EffectKind.TearIn or EffectKind.CardFlip or EffectKind.InkSpread
+        or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter
+        or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble;
+    public static EffectClip? Active(IEnumerable<EffectClip> clips,double time)=>
+        clips.LastOrDefault(clip=>time>=clip.Start&&time<clip.End&&IsRasterEffect(clip.Options.Kind));
+
+    public static void Draw(SKCanvas canvas,SKImage image,EffectClip clip,double time,SKPaint paint,float x=0,float y=0)
+    {
+        var progress=(float)ClipTiming.Progress(clip,time);
+        var power=(float)clip.Options.Power;
+        switch(clip.Options.Kind)
+        {
+            case EffectKind.Typewriter: DrawTypewriter(canvas,image,progress,paint,x,y);break;
+            case EffectKind.Wave: DrawWave(canvas,image,image.Width,image.Height,progress,power,(float)clip.Options.Speed,paint,x,y);break;
+            case EffectKind.Fragments: DrawFragments(canvas,image,image.Width,image.Height,progress,power,paint,x,y);break;
+            case EffectKind.TearIn: DrawTearReveal(canvas,image,image.Width,image.Height,progress,power,paint,x,y);break;
+            default: DrawEntrance(canvas,image,image.Width,image.Height,clip,progress,power,paint,x,y);break;
+        }
+    }
+
     public static bool DrawEntrance(SKCanvas canvas,SKImage image,int width,int height,EffectClip clip,float progress,float power,SKPaint paint,float x=0,float y=0)
     {
         var p=Math.Clamp(progress,0,1);var w=(float)width;var h=(float)height;var bounds=SKRect.Create(x,y,w,h);
@@ -102,20 +123,20 @@ internal static class EffectMotionRenderer
         paint.Color=original;
     }
 
-    public static void DrawTypewriter(SKCanvas canvas, SKBitmap bitmap, SKImage image, float progress, SKPaint paint, float x = 0, float y = 0)
+    public static void DrawTypewriter(SKCanvas canvas, SKImage image, float progress, SKPaint paint, float x = 0, float y = 0)
     {
-        var count = Math.Clamp((int)Math.Round(bitmap.Width / Math.Max(1, bitmap.Height * .62f)), 1, 48);
+        var count = Math.Clamp((int)Math.Round(image.Width / Math.Max(1, image.Height * .62f)), 1, 48);
         var visible = Math.Clamp(progress, 0, 1) * count;
         for (var i = 0; i < count; i++)
         {
             var local = Math.Clamp(visible - i, 0, 1);
             if (local <= 0) continue;
-            var left = i * bitmap.Width / (float)count;
-            var right = (i + 1) * bitmap.Width / (float)count;
+            var left = i * image.Width / (float)count;
+            var right = (i + 1) * image.Width / (float)count;
             var original = paint.Color;
             paint.Color = original.WithAlpha((byte)(original.Alpha * local));
-            canvas.DrawImage(image, SKRect.Create(left, 0, right - left, bitmap.Height),
-                SKRect.Create(x + left - 1, y, right - left + 2, bitmap.Height), Sampling, paint);
+            canvas.DrawImage(image, SKRect.Create(left, 0, right - left, image.Height),
+                SKRect.Create(x + left - 1, y, right - left + 2, image.Height), Sampling, paint);
             paint.Color = original;
         }
     }
@@ -123,7 +144,7 @@ internal static class EffectMotionRenderer
     public static void DrawWave(SKCanvas canvas, SKImage image, int width, int height, float progress, float power, float speed, SKPaint paint, float x = 0, float y = 0)
     {
         var strip = Math.Max(4, width / 80);
-        var amplitude = Math.Clamp(height * .035f * power, 1, height * .16f);
+        var amplitude = Math.Min(height * .16f, Math.Max(1, height * .035f * power));
         var phase = progress * MathF.PI * 2 * speed;
         for (var left = 0; left < width; left += strip)
         {
@@ -164,7 +185,7 @@ internal static class EffectMotionRenderer
     {
         if (progress <= 0) return;
         var edge = progress * width;
-        var tooth = Math.Clamp(height * .035f * power, 2, height * .12f);
+        var tooth = Math.Min(height * .12f, Math.Max(2, height * .035f * power));
         using var tear = new SKPath();
         tear.MoveTo(x, y);
         const int segments = 18;

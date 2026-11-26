@@ -125,8 +125,14 @@ internal static class Program
         }
         if(args.Contains("--project-sources"))
         {
-            var projectWindow=new MainWindow();
             var folderPath=Directory.CreateDirectory(Path.Combine(folder,Guid.NewGuid().ToString("N"))).FullName;
+            Environment.SetEnvironmentVariable("LIVECG_DATA_DIR", Path.Combine(folderPath, "settings"));
+            DocumentStore.Save(DocumentStore.DefaultsPath, new AppDefaults { Video = new() { Fps = 24 } });
+            var projectWindow=new MainWindow();
+            Call(projectWindow,"Seek",1d,false);
+            Check(Control<ComboBox>(projectWindow,"FpsBox").Text=="30" &&
+                Control<TextBlock>(projectWindow,"TimeText").Text.StartsWith("30프레임 / "),
+                "new timeline uses 30 fps even with a saved 24 fps default");
             var source=Path.Combine(folderPath,"source.png");
             var replacement=Path.Combine(folderPath,"replacement.png");
             using var bitmap=new SKBitmap(80,60);
@@ -148,6 +154,11 @@ internal static class Program
             timeline.SetSelection([clip.Id],clip);
             Check(projectWindow.HandleEditorKey(System.Windows.Input.Key.Right,System.Windows.Input.ModifierKeys.None,timeline)&&Math.Abs(clip.Start-31d/30)<1e-8,"right arrow moves the selected clip one frame");
             Check(projectWindow.HandleEditorKey(System.Windows.Input.Key.Left,System.Windows.Input.ModifierKeys.None,timeline)&&Math.Abs(clip.Start-1)<1e-8,"left arrow returns the selected clip one frame");
+            projectWindow.ApplyDocument(new(){Jobs=[job],Video=new(){Fps=24}});
+            Call(projectWindow,"Seek",1d,false);
+            Check(Control<ComboBox>(projectWindow,"FpsBox").Text=="24" &&
+                Control<TextBlock>(projectWindow,"TimeText").Text.StartsWith("24프레임 / "),
+                "existing 24 fps project uses its saved frame rate");
             Console.WriteLine($"RESULT {checks-failures.Count}/{checks} passed");
             return failures.Count==0?0:1;
         }
@@ -170,12 +181,59 @@ internal static class Program
             Check(window.FindName("IntensitySlider") is null&&Control<ComboBox>(window,"StrengthBox").Items.Count==5,"strength has exactly five choices");
             Check(window.FindName("ZoomInButton") is not null&&window.FindName("ZoomOutButton") is not null,"precision zoom buttons exist");
             Check(window.FindName("VideoDurationBox") is null,"manual video duration removed");
-            Check(Control<System.Windows.Controls.Primitives.UniformGrid>(window,"EffectsGrid").Children.Count==21,"21 effect thumbnails including travel editor available");
+            var startGuide=Control<Border>(window,"StartGuide");
+            Check(startGuide.IsVisible&&Control<Button>(window,"StartGuideImportButton").IsVisible,
+                "empty editor shows the start guide and import button");
+            Call(window,"DetachPreview",window,new RoutedEventArgs());Pump();
+            var detachedPreview=Window.GetWindow(startGuide);
+            Check(detachedPreview is not null&&detachedPreview!=window&&detachedPreview.AllowDrop&&startGuide.IsVisible,
+                "start guide and drag-and-drop are available in the detached editor");
+            if(detachedPreview!=window)detachedPreview?.Close();
+            Pump();
+            var basic=Control<System.Windows.Controls.Primitives.UniformGrid>(window,"EffectsGrid").Children.OfType<EffectThumbnail>().ToList();
+            var added=Control<System.Windows.Controls.Primitives.UniformGrid>(window,"NewEffectsGrid").Children.OfType<EffectThumbnail>().ToList();
+            Check(basic.Count==18&&basic.All(thumb=>!ProductInfo.IsRetiredEffect(thumb.Kind)&&!ProductInfo.IsNewEffect(thumb.Kind)),"basic tab excludes retired and new effects");
+            Check(added.Count==27&&added.All(thumb=>ProductInfo.IsNewEffect(thumb.Kind)),"NEW tab contains all new thumbnail effects");
+            Check(window.FindName("EffectSearchBox") is null&&window.FindName("EffectCategoryBox") is null&&
+                window.FindName("NewEffectSearch") is null&&window.FindName("NewEffectCategory") is null,
+                "built-in and new effect tabs have no search or category controls");
+            Check(Control<ItemsControl>(window,"BundledPresets").Items.Count==9,"NEW tab includes built-in editable presets");
             Check(typeof(MainWindow).GetMethod("Redetect",BindingFlags.NonPublic|BindingFlags.Instance) is null,"automatic detection UI handler removed");
             Check(Control<ComboBox>(window,"FpsBox").Text=="60","saved default fps restored");
             var path=TestFixtures.Create(folder);var secondPath=Path.Combine(folder,"두 번째 PNG.png");File.Copy(path,secondPath,true);
             var job=new ImageJob{SourcePath=path,Width=960,Height=540};
             var secondJob=new ImageJob{SourcePath=secondPath,Width=960,Height=540};
+            window.ApplyDocument(new(){Jobs=[job,secondJob],Video=new(){Output=OutputKind.Webm,Fps=30,EndHold=.5}});Layout(window);
+            Check(startGuide.Visibility==Visibility.Collapsed,"the start guide is hidden when an image is open");
+            window.ApplyDocument(new());Layout(window);
+            Check(startGuide.IsVisible,"the start guide returns when the editor becomes empty");
+
+            var anchorClip=new EffectClip { Start=1,Duration=1,Section=ClipSection.Loop };
+            var nextClip=new EffectClip { Start=2,Duration=1 };
+            var otherClip=new EffectClip { Start=2,Duration=1 };
+            var presetRegion=new EffectRegion { Clips=[anchorClip,nextClip] };
+            var otherRegion=new EffectRegion { Clips=[otherClip] };
+            var presetJob=new ImageJob { SourcePath=path,Width=960,Height=540,Regions=[presetRegion,otherRegion] };
+            window.ApplyDocument(new(){Jobs=[presetJob]});
+            Call(window,"SelectRegion",presetRegion,anchorClip);
+            Call(window,"Seek",0d,false);
+            var combo=Control<ItemsControl>(window,"BundledPresets").Items.OfType<EffectAsset>().First(asset=>asset.Clips.Count>1);
+            Call(window,"InsertBundledPreset",new Button{Tag=combo},new RoutedEventArgs());
+            var inserted=presetRegion.Clips.Where(clip=>clip.AssetId==combo.Id).ToList();
+            Check(Math.Abs(inserted.Min(clip=>clip.Start)-anchorClip.End)<1e-7&&Math.Abs(nextClip.Start-inserted.Max(clip=>clip.End))<1e-7&&otherClip.Start==2,
+                "bundled preset inserts behind the selected effect independently of the playhead and only shifts following clips in that region");
+            Call(window,"UndoEdit",window,new RoutedEventArgs());
+            presetRegion=Field<ObservableCollection<ImageJob>>(window,"_jobs")[0].Regions.First(region=>region.Id==presetRegion.Id);
+            anchorClip=presetRegion.Clips.First(clip=>clip.Id==anchorClip.Id);
+            Check(presetRegion.Clips.Count==2&&presetRegion.Clips.Any(clip=>clip.Id==nextClip.Id&&clip.Start==2),
+                "one undo removes the inserted preset and restores following timing");
+            Call(window,"SelectRegion",presetRegion,anchorClip);
+            var replacement=Control<ItemsControl>(window,"BundledPresets").Items.OfType<EffectAsset>().First(asset=>asset.Duration<=1&&asset.Clips.Count==1);
+            Call(window,"ReplaceBundledPreset",new Button{Tag=replacement},new RoutedEventArgs());
+            Check(presetRegion.Clips.All(clip=>clip.Id!=anchorClip.Id)&&presetRegion.Clips.Any(clip=>clip.AssetId==replacement.Id&&clip.Start==1&&clip.Section==ClipSection.Loop)
+                &&presetRegion.Clips.Any(clip=>clip.Id==nextClip.Id&&clip.Start==2),
+                "preset replacement preserves selected start and explicit phase without moving a later clip when there is room");
+
             window.ApplyDocument(new(){Jobs=[job,secondJob],Video=new(){Output=OutputKind.Webm,Fps=30,EndHold=.5}});Layout(window);
             Check(job.Regions.Count==0,"PNG begins without automatic regions");
             Check(Control<ComboBox>(window,"FpsBox").Text=="30","loaded project keeps its fps over defaults");
@@ -243,7 +301,7 @@ internal static class Program
             var saved=DocumentStore.Load<AppDefaults>(DocumentStore.DefaultsPath);
             Check(saved.Video.Fps==24&&saved.Effect.Strength==StrengthLevel.Strong&&Math.Abs(saved.ClipDuration-1.4)<1e-8,"defaults save video and selected clip options");
             var reopened=new MainWindow();Pump();
-            Check(Control<ComboBox>(reopened,"FpsBox").Text=="24"&&Control<ComboBox>(reopened,"StrengthBox").SelectedIndex==ProductInfo.StrengthIndex(StrengthLevel.Strong),"new application restores three-level defaults");
+            Check(Control<ComboBox>(reopened,"FpsBox").Text=="30"&&Control<ComboBox>(reopened,"StrengthBox").SelectedIndex==ProductInfo.StrengthIndex(StrengthLevel.Strong),"legacy 24 fps default migrates to 30 fps while keeping effect strength");
             typeof(MainWindow).GetField("_dirty",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(reopened,false);reopened.Close();
             WorkflowUiChecks.Run(window,folder,Check);
             StudioUiChecks.Run(window,folder,Check);
@@ -267,7 +325,7 @@ internal static class Program
             Control<CheckBox>(window,"SnapCheck").IsChecked=true;Control<CheckBox>(window,"RippleCheck").IsChecked=true;
             Control<ListBox>(window,"RegionList").SelectedItem=demo.Regions[3];Call(window,"Seek",3.55,true);Pump();
             Control<CheckBox>(window,"HideOverlaysCheck").IsChecked=true;Snapshot(window,"clean-preview.png");Control<CheckBox>(window,"HideOverlaysCheck").IsChecked=false;
-            Control<TabControl>(window,"EffectsTabs").SelectedIndex=1;Control<CheckBox>(window,"ClipLoopCheck").IsChecked=true;Snapshot(window,"clip-properties.png");Control<TabControl>(window,"EffectsTabs").SelectedIndex=0;
+            Control<TabControl>(window,"EffectsTabs").SelectedItem=Control<TabItem>(window,"ClipPropertiesTab");Control<CheckBox>(window,"ClipLoopCheck").IsChecked=true;Snapshot(window,"clip-properties.png");Control<TabControl>(window,"EffectsTabs").SelectedIndex=0;
             Snapshot(window,"timeline-editor.png");Snapshot(window,"timeline-minimum.png",1128,720);
             var editorRoot=(FrameworkElement)window.Content;var effectTabs=Control<TabControl>(window,"EffectsTabs");var timelineScroll=Control<ScrollViewer>(window,"TimelineScroll");
             Check(effectTabs.ActualHeight>100&&timelineScroll.TranslatePoint(new Point(timelineScroll.ActualWidth,0),editorRoot).X<=effectTabs.TranslatePoint(new Point(0,0),editorRoot).X,"minimum layout keeps effect library visible beside timeline");

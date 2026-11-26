@@ -42,7 +42,7 @@ public sealed partial class EffectScene : IDisposable
         Draw(canvas, regions, time); return bitmap;
     }
 
-    private static bool Identity(MotionState s)=>s.Alpha==1&&s.Scale==1&&s.ScaleX==1&&s.ScaleY==1&&s.X==0&&s.Y==0&&s.Angle==0&&s.WaveAmplitude==0&&!s.HasCrop&&!s.HasTypewriter&&!s.HasReveal;
+    private static bool Identity(MotionState s)=>s.Alpha==1&&s.Scale==1&&s.ScaleX==1&&s.ScaleY==1&&s.X==0&&s.Y==0&&s.Angle==0&&!s.HasCrop&&!s.HasReveal;
     private static void ClipCrop(SKCanvas canvas,SKRect bounds,MotionState s)
     {if(s.HasCrop)canvas.ClipRect(SKRect.Create(bounds.Left+bounds.Width*s.CropLeft,bounds.Top+bounds.Height*s.CropTop,Math.Max(0,bounds.Width*(1-s.CropLeft-s.CropRight)),Math.Max(0,bounds.Height*(1-s.CropTop-s.CropBottom))));}
     private static bool NumericAt(IReadOnlyList<EffectClip> clips, Layer layer, double time) =>
@@ -89,17 +89,9 @@ public sealed partial class EffectScene : IDisposable
             using var paint=new SKPaint{IsAntialias=true,Color=SKColors.White.WithAlpha((byte)(Math.Clamp(state.Alpha,0,1)*255))};
             var roll=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.DigitRoll&&time>=c.Start&&time<c.End):null;
             var bounce=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Bounce&&time>=c.Start&&time<c.End):null;
-            var wave=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Wave&&time>=c.Start&&time<c.End):null;
-            var fragments=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Fragments&&time>=c.Start&&time<c.End):null;
-            var tear=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.TearIn&&time>=c.Start&&time<c.End):null;
-            var typewriter=effects?clips.LastOrDefault(c=>c.Options.Kind==EffectKind.Typewriter&&time>=c.Start&&time<c.End):null;
-            var special=effects?clips.LastOrDefault(c=>(c.Options.Kind is EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble)&&time>=c.Start&&time<c.End):null;
+            var special=effects?EffectMotionRenderer.Active(clips,time):null;
             if((roll is not null||bounce is not null)&&layer.Digits.Count>0)DrawDigits(canvas,layer,roll,bounce,time,paint);
-            else if(typewriter is not null)EffectMotionRenderer.DrawTypewriter(canvas,layer.Bitmap,layer.Image,(float)ClipTiming.Progress(typewriter,time),paint);
-            else if(wave is not null)EffectMotionRenderer.DrawWave(canvas,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(wave,time),(float)wave.Options.Power,(float)wave.Options.Speed,paint);
-            else if(fragments is not null)EffectMotionRenderer.DrawFragments(canvas,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(fragments,time),(float)fragments.Options.Power,paint);
-            else if(tear is not null)EffectMotionRenderer.DrawTearReveal(canvas,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,(float)ClipTiming.Progress(tear,time),(float)tear.Options.Power,paint);
-            else if(special is not null)EffectMotionRenderer.DrawEntrance(canvas,layer.Image,layer.Bitmap.Width,layer.Bitmap.Height,special,(float)ClipTiming.Progress(special,time),(float)special.Options.Power,paint);
+            else if(special is not null)EffectMotionRenderer.Draw(canvas,layer.Image,special,time,paint);
             else if(!Identity(state)) canvas.DrawImage(layer.Image,0,0,Sampling,paint);
             if(effects)foreach(var clip in clips)
             {
@@ -144,7 +136,7 @@ public sealed partial class EffectScene : IDisposable
             if (ProductInfo.IsEntrance(clip.Options.Kind))
             {
                 var q = Math.Pow(p, 1 / speed); var ease = (float)(1 - Math.Pow(1 - q, 3));
-                if(time<clip.End&&clip.Options.Kind is (EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble))state.HasReveal=true;
+                if(time<clip.End&&EffectMotionRenderer.IsRasterEffect(clip.Options.Kind))state.HasReveal=true;
                 if(clip.Options.Kind is not (EffectKind.WipeRight or EffectKind.WipeFromRight or EffectKind.WipeFromTop or EffectKind.WipeFromBottom or EffectKind.Typewriter or EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble))state.Alpha *= ease;
                 switch (clip.Options.Kind)
                 {
@@ -154,7 +146,6 @@ public sealed partial class EffectScene : IDisposable
                     case EffectKind.WipeFromRight: state.CropLeft=Math.Max(state.CropLeft,1-ease); break;
                     case EffectKind.WipeFromTop: state.CropBottom=Math.Max(state.CropBottom,1-ease); break;
                     case EffectKind.WipeFromBottom: state.CropTop=Math.Max(state.CropTop,1-ease); break;
-                    case EffectKind.Typewriter: state.HasTypewriter=true; break;
                     case EffectKind.ZoomIn: state.Scale *= .12f + .88f * ease; break;
                     case EffectKind.ZoomOutIn: state.Scale *= 1 + (1 - ease) * (.4f + .45f * power); break;
                 }
@@ -171,7 +162,7 @@ public sealed partial class EffectScene : IDisposable
                 case EffectKind.Blink:
                     state.Alpha*=.12f+.88f*(.5f+.5f*MathF.Cos((float)(p*speed*Math.PI*4)));break;
                 case EffectKind.Wave:
-                    state.WaveAmplitude=Math.Max(state.WaveAmplitude,.035f*power);state.WavePhase=(float)(p*Math.PI*2*speed);break;
+                    state.HasReveal=true;break;
                 case EffectKind.Bounce when !digitBounce: state.Y -= MathF.Abs(MathF.Sin((float)p * MathF.PI * 3 * speed)) * bounds.Height * .32f * power * envelope; break;
                 case EffectKind.Shake:
                     state.Angle += MathF.Sin((float)p * MathF.PI * 14 * speed) * 8 * power * envelope;
@@ -210,15 +201,6 @@ public sealed partial class EffectScene : IDisposable
                 { paint.MaskFilter = blur; canvas.DrawPath(outline, paint); }
                 paint.MaskFilter = null; paint.StrokeWidth = Math.Max(2, height * .025f); canvas.DrawPath(outline, paint);
                 break;
-            case EffectKind.Highlight:
-                paint.Color = Tint(new SKColor(255, 225, 32, (byte)(Math.Min(210, 120 * power) * opacity)));
-                paint.BlendMode = SKBlendMode.Multiply;
-                canvas.Save(); canvas.ClipPath(outline, antialias: true);
-                canvas.DrawRoundRect(SKRect.Create(-width * .02f, height * .3f, width * 1.04f * (float)(1 - Math.Pow(1 - p, 3)), height * .65f), height * .12f, height * .12f, paint); canvas.Restore();
-                break;
-            case EffectKind.Underline:
-                paint.Color=Tint(new SKColor(255,225,32,(byte)(Math.Min(210,120*power)*opacity)));
-                canvas.DrawRoundRect(SKRect.Create(-width*.03f,height*.86f,width*1.06f*(float)(1-Math.Pow(1-p,3)),Math.Max(2,height*.10f)),height*.05f,height*.05f,paint);break;
             case EffectKind.DrawCircle:
                 var circleRect=SKRect.Create(-width*.04f,-height*.08f,width*1.08f,height*1.16f);using(var circle=new SKPath()){circle.AddArc(circleRect,-90,360*p);paint.Color=Tint(new SKColor(255,88,98,(byte)(255*opacity)));paint.Style=SKPaintStyle.Stroke;paint.StrokeCap=SKStrokeCap.Round;paint.StrokeWidth=Math.Max(2,height*.035f*power);canvas.DrawPath(circle,paint);}break;
             case EffectKind.StrikeThrough:
@@ -243,18 +225,6 @@ public sealed partial class EffectScene : IDisposable
                 var fold=Math.Max(3,Math.Min(width,height)*.32f*power*(float)(.25+.75*p));using(var back=new SKPath()){back.MoveTo(width,0);back.LineTo(width-fold,0);back.LineTo(width,fold);back.Close();paint.Color=Tint(new SKColor(20,30,44,(byte)(150*opacity)));canvas.DrawPath(back,paint);}
                 using(var page=new SKPath()){page.MoveTo(width,0);page.LineTo(width-fold,0);page.LineTo(width,fold);page.Close();paint.Color=Tint(new SKColor(244,247,248,(byte)(230*opacity)));canvas.DrawPath(page,paint);}
                 using(var crease=new SKPaint{Color=Tint(new SKColor(125,138,145,(byte)(190*opacity))),IsAntialias=true,Style=SKPaintStyle.Stroke,StrokeWidth=Math.Max(1,height*.012f)})canvas.DrawLine(width-fold,0,width,fold,crease);break;
-            case EffectKind.Sparkle:
-                for (var i = 0; i < 8; i++)
-                {
-                    var sx = width * (i % 4) / 3; var sy = i < 4 ? -height * .08f : height * 1.08f;
-                    var size = height * .22f * power * (.4f + .6f * MathF.Abs(MathF.Sin(p * 9 + i))) * edge;
-                    paint.Color = Tint(new SKColor(255, 247, 192, (byte)(255 * amplitude)));
-                    using var star = new SKPath();
-                    star.MoveTo(sx, sy - size); star.LineTo(sx + size * .23f, sy - size * .23f); star.LineTo(sx + size, sy);
-                    star.LineTo(sx + size * .23f, sy + size * .23f); star.LineTo(sx, sy + size); star.LineTo(sx - size * .23f, sy + size * .23f);
-                    star.LineTo(sx - size, sy); star.LineTo(sx - size * .23f, sy - size * .23f); star.Close(); canvas.DrawPath(star, paint);
-                }
-                break;
             case EffectKind.Border:
                 paint.Style = SKPaintStyle.Stroke; paint.StrokeWidth = Math.Max(3, height * .065f * power);
                 using (var shader = SKShader.CreateSweepGradient(new(width / 2, height / 2),
@@ -529,9 +499,6 @@ public sealed class MotionState
     public float X { get; set; }
     public float Y { get; set; }
     public float Angle { get; set; }
-    public float WaveAmplitude { get; set; }
-    public float WavePhase { get; set; }
-    public bool HasTypewriter { get; set; }
     public bool HasReveal { get; set; }
 }
 

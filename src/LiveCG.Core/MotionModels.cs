@@ -87,7 +87,6 @@ public record MotionDefinition
         foreach(var p in new[]{MotionProperty.ScaleX,MotionProperty.ScaleY}){motion.SetKey(p,12,1);motion.SetKey(p,24,1.25);motion.SetKey(p,36,1);}
         motion.SetKey(MotionProperty.X,36,0);motion.SetKey(MotionProperty.X,60,1);return motion;
     }
-    public static MotionDefinition BannerPop()=>BannerPopMotion.Copy();
     public static double BannerPopScale(double progress)=>BannerPopMotion.Value(MotionProperty.ScaleX,Math.Clamp(progress,0,1)*BannerPopMotion.LengthFrames);
     public static (double X,double Y) BannerSquash(double progress)
     {var frame=Math.Clamp(progress,0,1)*BannerSquashMotion.LengthFrames;return(BannerSquashMotion.Value(MotionProperty.ScaleX,frame),BannerSquashMotion.Value(MotionProperty.ScaleY,frame));}

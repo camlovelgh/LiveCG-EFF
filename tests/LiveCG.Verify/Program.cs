@@ -11,6 +11,14 @@ var folder=Path.Combine(root,"artifacts","v010-core");Directory.CreateDirectory(
 Environment.SetEnvironmentVariable("LIVECG_DATA_DIR",Path.Combine(folder,"user-data"));
 var failures=new List<string>();var count=0;
 void Check(bool ok,string name){count++;Console.WriteLine((ok?"PASS ":"FAIL ")+name);if(!ok)failures.Add(name);}
+if(args.Contains("--new-effects")||args.Contains("--new-effects-compare"))
+{
+    var fixture=Path.Combine(root,"artifacts","v160-effects");
+    if(args.Contains("--new-effects"))await NewEffectsChecks.Create(fixture,Check);
+    else NewEffectsChecks.Compare(fixture,args[^3],int.Parse(args[^2]),args[^1]=="premultiplied",Check);
+    Console.WriteLine($"RESULT {count-failures.Count}/{count} passed");
+    return failures.Count==0?0:1;
+}
 if(args.Contains("--broadcast-updates")){await BroadcastUpdateChecks.Run(folder,Check);Console.WriteLine($"RESULT {count-failures.Count}/{count} passed");return failures.Count==0?0:1;}
 if(args.Contains("--linked-refresh")){Console.WriteLine(JsonSerializer.Serialize(await LinkedOutputChecks.Refresh(folder)));return 0;}
 if(args.Contains("--linked-scene")){Console.WriteLine(JsonSerializer.Serialize(LinkedOutputChecks.MoveScene(folder,args.Last())));return 0;}
@@ -32,7 +40,7 @@ if(args.Contains("--v12-only")){await V12Checks.Run(folder,Check);Console.WriteL
 void Png(SKBitmap b,string path){using var image=SKImage.FromBitmap(b);using var data=image.Encode(SKEncodedImageFormat.Png,100);File.WriteAllBytes(path,data.ToArray());}
 if(args.Contains("--visual-repro")){BroadcastChecks.VisualRepro(folder,Check);return failures.Count==0?0:1;}
 if(args.Contains("--playback-only")){await PlaybackChecks.Run(folder,Check);Console.WriteLine($"RESULT {count-failures.Count}/{count} passed");return failures.Count==0?0:1;}
-Check(Enum.GetValues<EffectKind>().Count(k=>k!=EffectKind.UserMotion)==21,"21 distinct effects including the travel editor without per-video duplicates");
+Check(ProductInfo.SelectableEffects.Count(ProductInfo.IsNewEffect)==27,"27 new effects");
 Check(Enum.GetValues<StrengthLevel>().Length==5,"five named strength levels");
 var identityRegion=new EffectRegion();var regionHash=identityRegion.GetHashCode();identityRegion.Bounds=new(.2,.2,.2,.2);identityRegion.Name="변경";
 Check(identityRegion.GetHashCode()==regionHash,"region identity stays stable during spatial and name edits");
@@ -94,7 +102,7 @@ using(var scene=new EffectScene(source))
     var price=demo.Regions[3].Copy(false);price.Clips=[];
     using var unchanged=scene.Render([price],new(),0);
     Check(unchanged.Bytes.SequenceEqual(source.Bytes),"regions without clips leave source pixels unchanged");
-    foreach(var kind in Enum.GetValues<EffectKind>().Where(k=>k!=EffectKind.UserMotion&&k!=EffectKind.TravelRoute))
+    foreach(var kind in ProductInfo.SelectableEffects.Where(k=>k!=EffectKind.UserMotion&&k!=EffectKind.TravelRoute))
     {
         var effectRegion=price with {Clips=[new(){Duration=1,Options=new(){Kind=kind,Strength=StrengthLevel.Strong}}]};
         using var frame=scene.Render([effectRegion],new(),.35);

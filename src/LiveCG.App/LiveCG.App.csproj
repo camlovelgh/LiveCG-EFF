@@ -5,7 +5,11 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier><SelfContained>true</SelfContained>
     <ApplicationIcon>Assets\LiveCG.ico</ApplicationIcon>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(StartupDiagnostics)' == 'true'">
+    <DefineConstants>$(DefineConstants);LIVE_CG_STARTUP_DIAGNOSTICS</DefineConstants>
+  </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\LiveCG.Core\LiveCG.Core.csproj" /><PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" /></ItemGroup>
+  <ItemGroup><None Include="..\..\effects\*.lcgeffect.json" Link="effects\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\LiveCG.ico" /></ItemGroup>
   <ItemGroup><Content Include="..\..\effects\*.lcgeffect.json" Link="effects\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
 </Project>

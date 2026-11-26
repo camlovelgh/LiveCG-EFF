@@ -3,6 +3,15 @@ using System.Text.Json.Serialization;
 
 namespace LiveCG.Core;
 
+public sealed record EffectFavorites(HashSet<EffectKind> Effects, HashSet<Guid> Presets)
+{
+    public void Validate()
+    {
+        if(Effects is null||Presets is null||Effects.Any(kind=>!Enum.IsDefined(kind))||Presets.Contains(Guid.Empty))
+            throw new InvalidDataException("즐겨찾기 설정 형식을 확인하세요.");
+    }
+}
+
 public class EffectAsset
 {
     public int SchemaVersion { get; set; }=1;
@@ -29,24 +38,33 @@ public static class AssetStore
 {
     public static string DirectoryPath=>Path.Combine(DocumentStore.DataDirectory,"assets");
     public static string PathFor(Guid id)=>Path.Combine(DirectoryPath,id.ToString("N")+".lcgeffect.json");
-    public static IReadOnlyList<EffectAsset> List(out List<string> errors)
+    public static IReadOnlyList<EffectAsset> List(out List<string> errors)=>ReadLibrary(DirectoryPath,out errors);
+    public static IReadOnlyList<EffectAsset> ListBundled(out List<string> errors)=>
+        ReadLibrary(Path.Combine(AppContext.BaseDirectory,"effects"),out errors);
+    private static IReadOnlyList<EffectAsset> ReadLibrary(string directory,out List<string> errors)
     {
-        errors=[];SeedBundled(errors);var list=new List<EffectAsset>();if(!Directory.Exists(DirectoryPath))return list;
-        foreach(var path in Directory.EnumerateFiles(DirectoryPath,"*.lcgeffect.json"))
-            try{list.Add(DocumentStore.Load<EffectAsset>(path));}catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add(Path.GetFileName(path)+": "+ex.Message);}
-        return list.OrderByDescending(a=>a.Favorite).ThenBy(a=>a.Name).ToList();
-    }
-    private static void SeedBundled(List<string> errors)
-    {
-        var bundled=Path.Combine(AppContext.BaseDirectory,"effects");if(!Directory.Exists(bundled))return;
-        try{Directory.CreateDirectory(DirectoryPath);}catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add("효과 폴더: "+ex.Message);return;}
-        foreach(var source in Directory.EnumerateFiles(bundled,"*.lcgeffect.json"))
-            try
+        errors=[];
+        var list=new List<EffectAsset>();
+        if(!Directory.Exists(directory))return list;
+        try
+        {
+            foreach(var path in Directory.EnumerateFiles(directory,"*.lcgeffect.json"))
             {
-                var asset=DocumentStore.Load<EffectAsset>(source);var target=PathFor(asset.Id);
-                if(!File.Exists(target))File.Copy(source,target);
+                try
+                {
+                    list.Add(DocumentStore.Load<EffectAsset>(path));
+                }
+                catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException)
+                {
+                    errors.Add(Path.GetFileName(path)+" · "+ex.Message);
+                }
             }
-            catch(Exception ex)when(ex is IOException or UnauthorizedAccessException){errors.Add(Path.GetFileName(source)+": "+ex.Message);}
+        }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException)
+        {
+            errors.Add(Path.GetFileName(directory)+" · "+ex.Message);
+        }
+        return list.OrderByDescending(asset=>asset.Favorite).ThenBy(asset=>asset.Name).ToList();
     }
     public static void Save(EffectAsset asset){asset.Validate();DocumentStore.Save(PathFor(asset.Id),asset);}
     public static EffectAsset Import(string path){var asset=DocumentStore.Load<EffectAsset>(path).Copy(true);asset.IsNew=true;Save(asset);return asset;}
@@ -55,10 +73,10 @@ public static class AssetStore
         var path=PathFor(id);if(!File.Exists(path))return;var trash=Path.Combine(DirectoryPath,"deleted");Directory.CreateDirectory(trash);
         File.Move(path,Path.Combine(trash,id.ToString("N")+"-"+DateTime.UtcNow.Ticks+".json"));
     }
-    public static List<EffectClip> Instantiate(EffectAsset asset,double start,int fps)
+    public static List<EffectClip> Instantiate(EffectAsset asset,double start,int fps,bool bundled=false)
     {
         asset.Validate();var result=new List<EffectClip>();var instance=Guid.NewGuid();var sequences=new Dictionary<Guid,Guid>();
-        foreach(var item in asset.Clips){var clip=item.Copy();TimelineRules.SetTiming(clip,start+item.Start,item.Duration,fps);if(clip.SequenceId is { } id){if(!sequences.TryGetValue(id,out var next))sequences[id]=next=Guid.NewGuid();clip.SequenceId=next;}clip.AssetId=asset.Id;clip.AssetInstanceId=instance;clip.AssetName=asset.Name;result.Add(clip);}
+        foreach(var item in asset.Clips.Where(clip=>!ProductInfo.IsRetiredEffect(clip.Options.Kind))){var clip=item.Copy();TimelineRules.SetTiming(clip,start+item.Start,item.Duration,fps);if(clip.SequenceId is { } id){if(!sequences.TryGetValue(id,out var next))sequences[id]=next=Guid.NewGuid();clip.SequenceId=next;}clip.AssetId=asset.Id;clip.AssetInstanceId=instance;clip.AssetName=asset.Name;clip.AllowTransparentMotion|=bundled;result.Add(clip);}
         return result;
     }
 }

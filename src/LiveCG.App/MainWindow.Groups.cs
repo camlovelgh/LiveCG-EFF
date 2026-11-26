@@ -50,7 +50,7 @@ public partial class MainWindow
     public void SelectMask(EffectRegion owner,MaskTrack mask)
     {
         if(_current is null||!owner.Masks.Contains(mask))return;SelectRegion(owner,null,false);owner.Collapsed=false;var parent=_current.Regions.FirstOrDefault(g=>g.Id==owner.ParentId);if(parent is not null)parent.Collapsed=false;
-        _selectedMask=mask;Preview.SelectedMask=mask;Preview.SelectedRegion=owner;TimelineEditor.SelectedMask=mask;TimelineEditor.SelectedClipIds.Clear();EffectsTabs.SelectedIndex=3;GroupMaskTabs.SelectedIndex=1;RefreshRegionList();LoadGroupFields();RefreshTimeline();
+        _selectedMask=mask;Preview.SelectedMask=mask;Preview.SelectedRegion=owner;TimelineEditor.SelectedMask=mask;TimelineEditor.SelectedClipIds.Clear();EffectsTabs.SelectedItem=GroupsTab;GroupMaskTabs.SelectedIndex=1;RefreshRegionList();LoadGroupFields();RefreshTimeline();
     }
     private void MaskListChanged(object sender,SelectionChangedEventArgs e){if(!_loading&&_region is not null&&MaskList.SelectedItem is MaskTrack mask)SelectMask(_region,mask);}
     public (double Start,double Duration) NewMaskSpan(EffectRegion owner)

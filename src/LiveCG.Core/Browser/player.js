@@ -10,14 +10,15 @@
     const plan = data.plan, fps = data.fps;
     const A = plan.introFrames / fps, B = plan.loopEndFrame / fps, END = plan.endFrame / fps, LOOP = B - A;
     const REST=(plan.restFrames??0)/fps, CYCLE=LOOP+REST;
-    const entrances = new Set(["FadeIn", "RiseIn", "ZoomIn", "ZoomOutIn", "Typewriter", "CardFlip", "InkSpread", "FocusPull", "EchoTrail", "CenterCurtain", "VenetianShutter", "IrisOpen", "CharacterRotateRise", "SplitConverge", "TileAssemble"]);
+    const entrances = new Set(["FadeIn", "RiseIn", "ZoomIn", "ZoomOutIn", "WipeRight", "WipeFromRight", "WipeFromTop", "WipeFromBottom", "FallIn", "Typewriter", "Fragments", "TearIn", "CardFlip", "InkSpread", "FocusPull", "EchoTrail", "CenterCurtain", "VenetianShutter", "IrisOpen", "CharacterRotateRise", "SplitConverge", "TileAssemble"]);
     const revealEntrances = new Set(["CardFlip", "InkSpread", "FocusPull", "EchoTrail", "CenterCurtain", "VenetianShutter", "IrisOpen", "CharacterRotateRise", "SplitConverge", "TileAssemble"]);
-    const needsLayer = k => entrances.has(k) || ["Zoom", "Bounce", "Shake", "Float", "DigitRoll", "UserMotion", "PopReturn", "Squash", "Blink"].includes(k);
+    const needsLayer = k => entrances.has(k) || ["Zoom", "Bounce", "Shake", "Float", "DigitRoll", "UserMotion", "PopReturn", "Squash", "Blink", "Wave"].includes(k);
     const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
     const image = name => images.get(name);
     const power = c => ({VeryWeak:.18,Weak:.55,Medium:1,Strong:1.65,VeryStrong:2.4}[c.options.strength] ?? 1);
-    const holds = k => k === "Highlight" || k === "Underline" || k === "TravelRoute";
-    entrances.add("WipeRight"); entrances.add("WipeFromRight"); entrances.add("WipeFromTop"); entrances.add("WipeFromBottom"); entrances.add("FallIn");
+    const holds = k => ["TravelRoute", "StrikeThrough", "PaperCorner"].includes(k);
+    const retired = new Set(["Sparkle", "Highlight", "Underline"]);
+    const newEffects = new Set(data.newEffects ?? []);
     const blank = (key, w, h) => {
         let c = buffers.get(key);
         if (!c) { c = document.createElement("canvas"); buffers.set(key, c); }
@@ -28,8 +29,9 @@
     const copy = (key, source) => { const c = blank(key, source.width, source.height); c.getContext("2d").drawImage(source, 0, 0); return c; };
     function typewriter(x, source, p) {
         const count = clamp(Math.round(source.width / Math.max(1, source.height * .62)), 1, 48), visible = clamp(p) * count;
-        for (let i = 0; i < count; i++) { const alpha=clamp(visible-i); if(alpha<=0)continue; const left=i*source.width/count,right=(i+1)*source.width/count;x.globalAlpha=alpha;x.drawImage(source,left,0,right-left,source.height,left-1,0,right-left+2,source.height); }
-        x.globalAlpha=1;
+        const opacity=x.globalAlpha;
+        for (let i = 0; i < count; i++) { const alpha=clamp(visible-i); if(alpha<=0)continue; const left=i*source.width/count,right=(i+1)*source.width/count;x.globalAlpha=opacity*alpha;x.drawImage(source,left,0,right-left,source.height,left-1,0,right-left+2,source.height); }
+        x.globalAlpha=opacity;
     }
     function drawEntrance(x, source, kind, p, pow, left = 0, top = 0) {
         const w=source.width,h=source.height,e=1-(1-clamp(p))**3,alpha=x.globalAlpha;
@@ -44,7 +46,7 @@
             const eased=1-(1-clamp(p))**3,middle=w*.5,half=w-middle,travel=w*(1-eased);x.save();x.globalAlpha=alpha*eased;x.drawImage(source,0,0,middle,h,left-travel,top,middle,h);x.drawImage(source,middle,0,half,h,left+middle+travel,top,half,h);x.restore();return;
         }
         if(kind==="TileAssemble"){
-            const columns=6,rows=4,total=columns*rows;x.save();
+            const columns=6,rows=4,total=columns*rows;
             for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){const index=row*columns+column,order=(index*17+5)%total,start=order/total*.48,local=clamp((p-start)/.52);if(local<=0)continue;const eased=1-(1-local)**3,l=column*w/columns,r=(column+1)*w/columns,t=row*h/rows,b=(row+1)*h/rows,tw=r-l,th=b-t,dx=((order*13%11)-5)*w*.045*pow*(1-eased),dy=((order*7%9)-4)*h*.075*pow*(1-eased),rotation=((order%2===0)?-1:1)*(24+(order%4)*5)*(1-eased),sx=Math.max(.025,Math.sin((.08+.92*eased)*Math.PI*.5));x.save();x.globalAlpha=alpha*eased;x.translate(left+l+tw*.5+dx,top+t+th*.5+dy);x.rotate(rotation*Math.PI/180);x.scale(sx,.78+.22*eased);x.drawImage(source,l,t,tw,th,-tw*.5,-th*.5,tw,th);x.restore();}
             return;
         }
@@ -56,7 +58,7 @@
         }
         x.save();
         if(kind==="InkSpread"){
-            const radius=Math.hypot(w,h)*.55*clamp(p)**2.2;x.beginPath();for(let i=0;i<48;i++){const a=Math.PI*2*i/48,rough=1+(.035*Math.sin(i*2.17)+.022*Math.sin(i*4.91))*pow,px=left+w*.5+Math.cos(a)*radius*rough,py=top+h*.5+Math.sin(a)*radius*rough;i?x.lineTo(px,py):x.moveTo(px,py);}x.closePath();x.clip();
+            const radius=Math.hypot(w,h)*.55*(1-(1-clamp(p))**2.2);x.beginPath();for(let i=0;i<48;i++){const a=Math.PI*2*i/48,rough=1+(.035*Math.sin(i*2.17)+.022*Math.sin(i*4.91))*pow,px=left+w*.5+Math.cos(a)*radius*rough,py=top+h*.5+Math.sin(a)*radius*rough;i?x.lineTo(px,py):x.moveTo(px,py);}x.closePath();x.clip();
         } else if(kind==="CenterCurtain"){
             const visible=w*e;x.beginPath();x.rect(left+(w-visible)*.5,top,visible,h);x.clip();
         } else if(kind==="IrisOpen"){
@@ -67,6 +69,46 @@
         x.drawImage(source,left,top,w,h);x.restore();
     }
     const multiply = (target, mask) => { const x = target.getContext("2d"); x.save(); x.globalCompositeOperation = "destination-in"; x.drawImage(mask, 0, 0); x.restore(); };
+    const rasterKinds = new Set([...revealEntrances, "Typewriter", "Wave", "Fragments", "TearIn"]);
+    function rasterMotion(clips, time) {
+        return clips.filter(c => time >= c.start && time < c.start + c.duration && rasterKinds.has(c.options.kind)).at(-1);
+    }
+    function drawRasterMotion(x, source, clip, time, left = 0, top = 0) {
+        const {width: w, height: h} = source, k = clip.options.kind, p = progress(clip, time), strength = power(clip);
+        if (k === "Typewriter") {
+            x.save(); x.translate(left, top); typewriter(x, source, p); x.restore();
+        } else if (k === "Wave") {
+            const strip = Math.max(4, Math.floor(w / 80)), amplitude = Math.min(h * .16, Math.max(1, h * .035 * strength));
+            const phase = p * Math.PI * 2 * clip.options.speed;
+            for (let sx = 0; sx < w; sx += strip) {
+                const dw = Math.min(strip, w - sx), y = Math.sin(sx / w * Math.PI * 4 + phase) * amplitude;
+                x.drawImage(source, sx, 0, dw, h, left + sx - 1, top + y, dw + 2, h);
+            }
+        } else if (k === "Fragments") {
+            const opacity = x.globalAlpha;
+            for (let index = 0; index < 48; index++) {
+                const order = (index * 37 + 11) % 48, local = clamp((p - order / 48 * .55) / .45);
+                if (!local) continue;
+                const sw = w / 8, sh = h / 6, sx = index % 8 * sw, sy = Math.floor(index / 8) * sh;
+                const dx = ((order * 17 % 15) - 7) * w * .006 * strength * (1 - local);
+                const dy = ((order * 11 % 13) - 6) * h * .01 * strength * (1 - local);
+                x.globalAlpha = opacity * local;
+                x.drawImage(source, sx, sy, sw, sh, left + sx + dx - 1, top + sy + dy - 1, sw + 2, sh + 2);
+            }
+            x.globalAlpha = opacity;
+        } else if (k === "TearIn") {
+            if (!p) return;
+            const tooth = Math.min(h * .12, Math.max(2, h * .035 * strength));
+            x.save(); x.beginPath(); x.moveTo(left, top);
+            for (let i = 0; i <= 18; i++) {
+                const jitter = i === 0 || i === 18 ? 0 : Math.sin(i * 13.17 + 1.4) * tooth;
+                x.lineTo(left + clamp(p * w + jitter, 0, w), top + h * i / 18);
+            }
+            x.lineTo(left, top + h); x.closePath(); x.clip(); x.drawImage(source, left, top); x.restore();
+        } else {
+            drawEntrance(x, source, k, p, strength, left, top);
+        }
+    }
     function shape(r, b) {
         const p = new Path2D(), { x, y, width: w, height: h } = b;
         if (r.shape === "Ellipse") p.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
@@ -77,7 +119,7 @@
         return p;
     }
     function effective(clips, time) {
-        const list = clips.filter(c => c.enabled).slice().sort((a, b) => a.start - b.start), chosen = new Map();
+        const list = clips.filter(c => c.enabled && !retired.has(c.options.kind)).slice().sort((a, b) => a.start - b.start), chosen = new Map();
         for (const c of list) if (c.sequenceId && (!chosen.has(c.sequenceId) || c.start <= time)) chosen.set(c.sequenceId, c.id);
         return list.filter(c => !c.sequenceId || chosen.get(c.sequenceId) === c.id);
     }
@@ -129,20 +171,21 @@
             const p = progress(c, time), k = c.options.kind, pow = power(c), speed = c.options.speed, envelope = Math.sin(Math.PI * p) ** 2;
             if (entrances.has(k)) {
                 const ease = 1 - (1 - p ** (1 / speed)) ** 3; if(!["WipeRight","WipeFromRight","WipeFromTop","WipeFromBottom","Typewriter"].includes(k)&&!revealEntrances.has(k))s.alpha *= ease;
-                if(time<c.start+c.duration&&revealEntrances.has(k))s.reveal=true;
+                if(time<c.start+c.duration&&rasterKinds.has(k))s.reveal=true;
                 if (k === "RiseIn") s.y += (1 - ease) * bounds.height * (.65 + .4 * pow);
                 if (k === "FallIn") s.y -= (1 - ease) * bounds.height * (.65 + .4 * pow);
                 if (k === "WipeRight") s.right=Math.max(s.right,1-ease);
                 if (k === "WipeFromRight") s.left=Math.max(s.left,1-ease);
                 if (k === "WipeFromTop") s.bottom=Math.max(s.bottom,1-ease);
                 if (k === "WipeFromBottom") s.top=Math.max(s.top,1-ease);
-                if (k === "Typewriter") s.typewriter=true;
+                if (k === "Typewriter" && time < c.start + c.duration) s.typewriter=true;
                 if (k === "ZoomIn") s.scale *= .12 + .88 * ease;
                 if (k === "ZoomOutIn") s.scale *= 1 + (1 - ease) * (.4 + .45 * pow);
             } else if (time < c.start + c.duration) {
                 if (k === "Zoom") s.scale *= 1 + .23 * pow * Math.sin(p * Math.PI * speed) ** 2;
                 if (k === "PopReturn") { const pop=1+(bannerPopScale((p*speed)%1)-1)*pow; s.sx*=pop; s.sy*=pop; }
                 if (k === "Squash") { const [sx,sy]=bannerSquash((p*speed)%1); s.sx*=1+(sx-1)*pow; s.sy*=1+(sy-1)*pow; }
+                if (k === "Wave") s.reveal=true;
                 if (k === "Blink") s.alpha*=.12+.88*(.5+.5*Math.cos(p*speed*Math.PI*4));
                 if (k === "Bounce" && !digitBounce) s.y -= Math.abs(Math.sin(p * Math.PI * 3 * speed)) * bounds.height * .32 * pow * envelope;
                 if (k === "Shake") { s.angle += Math.sin(p * Math.PI * 14 * speed) * 8 * pow * envelope; s.x += Math.sin(p * Math.PI * 20 * speed) * bounds.width * .035 * pow * envelope; }
@@ -207,19 +250,40 @@
         } else if (k === "Glow") {
             x.strokeStyle = tint(c,255,218,88,240/255*amplitude); x.lineWidth = Math.max(3, h * .07 * pow);
             x.filter = `blur(${Math.max(3, h * .15 * pow)}px)`; x.stroke(outline); x.filter = "none"; x.lineWidth = Math.max(2, h * .025); x.stroke(outline);
-        } else if (k === "Highlight") {
-            x.clip(outline, "evenodd"); x.globalCompositeOperation = "multiply"; x.fillStyle = tint(c,255,225,32,Math.min(210,120*pow)/255*opacity);
-            const pth = new Path2D(); pth.roundRect(-w * .02, h * .3, w * 1.04 * (1 - (1 - p) ** 3), h * .65, h * .12); x.fill(pth);
-        } else if(k === "Underline") {
-            x.fillStyle=tint(c,255,225,32,Math.min(210,120*pow)/255*opacity);const pth=new Path2D();pth.roundRect(-w*.03,h*.86,w*1.06*(1-(1-p)**3),Math.max(2,h*.10),h*.05);x.fill(pth);
         } else if(k === "DrawCircle") {
             x.strokeStyle=tint(c,255,88,98,opacity);x.lineWidth=Math.max(2,h*.035*pow);x.lineCap='round';x.beginPath();x.ellipse(w/2,h/2,w*.54,h*.58,0,-Math.PI/2,-Math.PI/2+p*Math.PI*2);x.stroke();
-        } else if (k === "Sparkle") {
-            x.fillStyle = tint(c,255,247,192,amplitude);
-            for (let i = 0; i < 8; i++) {
-                const sx = w * (i % 4) / 3, sy = i < 4 ? -h * .08 : h * 1.08, size = h * .22 * pow * (.4 + .6 * Math.abs(Math.sin(p * 9 + i))) * edge;
-                const star = new Path2D(); [[0, -1], [.23, -.23], [1, 0], [.23, .23], [0, 1], [-.23, .23], [-1, 0], [-.23, -.23]].forEach((v, j) => j ? star.lineTo(sx + v[0] * size, sy + v[1] * size) : star.moveTo(sx, sy - size)); star.closePath(); x.fill(star);
+        } else if (k === "StrikeThrough") {
+            x.strokeStyle=tint(c,255,68,82,opacity); x.lineWidth=Math.max(2,h*.055*pow); x.lineCap="round";
+            x.beginPath(); x.moveTo(0,h*.54); x.lineTo(w*p,h*.54); x.stroke();
+        } else if (k === "Halftone") {
+            x.clip(outline,"evenodd"); x.fillStyle=tint(c,255,231,89,210/255*amplitude);
+            const spacing=clamp(h/8,5,24), radius=Math.max(1,spacing*.23*pow*edge);
+            for(let y=spacing/2;y<h;y+=spacing)for(let sx=spacing/2;sx<w;sx+=spacing){
+                x.beginPath(); x.arc(sx,y,radius,0,Math.PI*2); x.fill();
             }
+        } else if (k === "ColorSplit") {
+            const offset=Math.max(2,w*.012*pow);
+            if(alpha){
+                x.save(); x.clip(outline,"evenodd");
+                for(const [shift,red,green,blue] of [[-offset,255,30,112],[offset,22,235,255]]){
+                    const layer=blank(r.id+"-color-split",Math.ceil(w),Math.ceil(h)), surface=layer.getContext("2d");
+                    surface.fillStyle=tint(c,red,green,blue,150/255*amplitude); surface.fillRect(0,0,w,h);
+                    multiply(layer,alpha); x.drawImage(layer,shift,0);
+                }
+                x.restore();
+            }
+            x.strokeStyle=tint(c,255,255,255,100/255*amplitude); x.lineWidth=Math.max(1,h*.012);
+            for(let band=0;band<5;band++){
+                const y=(.18+band*.16)*h+Math.sin(p*18+band)*h*.025;
+                x.beginPath(); x.moveTo(w*.06,y); x.lineTo(w*(.3+.12*(band%3)),y); x.stroke();
+            }
+        } else if (k === "PaperCorner") {
+            const fold=Math.max(3,Math.min(w,h)*.32*pow*(.25+.75*p));
+            x.beginPath(); x.moveTo(w,0); x.lineTo(w-fold,0); x.lineTo(w,fold); x.closePath();
+            x.fillStyle=tint(c,20,30,44,150/255*opacity); x.fill();
+            x.fillStyle=tint(c,244,247,248,230/255*opacity); x.fill();
+            x.strokeStyle=tint(c,125,138,145,190/255*opacity); x.lineWidth=Math.max(1,h*.012);
+            x.beginPath(); x.moveTo(w-fold,0); x.lineTo(w,fold); x.stroke();
         } else if (k === "Border") {
             const g = x.createConicGradient(p * Math.PI * 2, w / 2, h / 2); g.addColorStop(0, tint(c,255,211,67,amplitude)); g.addColorStop(.3, tint(c,255,255,255,amplitude)); g.addColorStop(1, tint(c,255,211,67,.117647)); x.strokeStyle = g; x.lineWidth = Math.max(3, h * .065 * pow); x.stroke(outline);
         } else if (k === "Ripple") {
@@ -264,12 +328,12 @@
             }
         }); x.restore(); return true;
     }
-    function applyArea(frame, r, parent, time) {
-        const a = assets.get(r.id), clips = effective(r.clips, time); if (!clips.length) return;
+    function applyArea(frame, r, parent, time, clips) {
+        const a = assets.get(r.id); if (!clips.length) return;
         if(a.customRaster||r.softness?.enabled||r.contentOnly){applySoftArea(frame,r,parent,time,a,clips);return;}
         const b = { x: r.bounds.x * data.width - parent.x, y: r.bounds.y * data.height - parent.y, width: r.bounds.width * data.width, height: r.bounds.height * data.height };
         const numeric = a.digits.length > 0 && clips.some(c => ["DigitRoll", "Bounce"].includes(c.options.kind) && time >= c.start && time < c.start + c.duration), s = motion(clips, time, b, numeric);
-        const special=clips.filter(c=>revealEntrances.has(c.options.kind)&&time>=c.start&&time<c.start+c.duration).at(-1);
+        const special=rasterMotion(clips,time);
         const masks = maskCoverage(r, parent, time, r.id + "-masks");
         if (!identity(s) || numeric) {
             const old = copy(r.id + "-old", frame), effect = blank(r.id + "-effect", frame.width, frame.height), e = effect.getContext("2d");
@@ -283,7 +347,7 @@
                 e.clearRect(0, 0, effect.width, effect.height); e.drawImage(old, 0, 0); e.globalCompositeOperation = "destination-out"; e.drawImage(image(a.erase), ox, oy); e.globalCompositeOperation = "source-over"; e.drawImage(image(a.fill), ox, oy);
                 e.save(); e.translate(ox, oy); transform(e, local(a), s);crop(e,local(a),s); e.globalAlpha = clamp(s.alpha); digits(e, r, a, clips, time, { image: fg, backing }); e.globalAlpha = 1;
                 for (const c of clips) if (time >= c.start && (time < c.start + c.duration || holds(c.options.kind))) decoration(e, r, a.width, a.height, c, progress(c, time), s.alpha); e.restore();
-            } else { e.save(); transform(e, b, s);crop(e,b,s); e.globalAlpha = clamp(s.alpha);if(special)drawEntrance(e,image(a.image),special.options.kind,progress(special,time),power(special),a.x-parent.x,a.y-parent.y);else e.drawImage(old, 0, 0); e.restore(); }
+            } else { e.save(); transform(e, b, s);crop(e,b,s); e.globalAlpha = clamp(s.alpha);if(special)drawRasterMotion(e,image(a.image),special,time,a.x-parent.x,a.y-parent.y);else e.drawImage(old, 0, 0); e.restore(); }
             const coverage = blank(r.id + "-coverage", frame.width, frame.height), c = coverage.getContext("2d"); c.fillStyle = "white";
             if (numeric) c.fillRect(0, 0, coverage.width, coverage.height);
             else { c.fill(shape(r, b), "evenodd"); c.save(); transform(c, b, s); c.fill(shape(r, b), "evenodd"); c.restore(); }
@@ -311,8 +375,8 @@
         if(identity(s)&&!clips.some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind))))return;
         const composed=blank(r.id+"-soft-work",frame.width,frame.height),c=composed.getContext("2d");c.drawImage(frame,0,0);
         if (numericAt(a, clips, time) || !identity(s)) replaceSource(c, a, b.x, b.y, numericAt(a, clips, time));
-        const special=clips.filter(clip=>revealEntrances.has(clip.options.kind)&&time>=clip.start&&time<clip.start+clip.duration).at(-1);
-        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else if(special&&!numeric)drawEntrance(c,image(a.image),special.options.kind,progress(special,time),power(special),b.x,b.y);else if(!identity(s)) c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
+        const special=rasterMotion(clips,time);
+        c.save();transform(c,b,s);crop(c,b,s);c.globalAlpha=clamp(s.alpha);const number=blank(r.id+"-soft-number",a.width,a.height);if(digits(number.getContext("2d"),r,a,clips,time))c.drawImage(number,b.x,b.y);else if(special)drawRasterMotion(c,image(a.image),special,time,b.x,b.y);else if(!identity(s)) c.drawImage(image(a.image),b.x,b.y);c.globalAlpha=1;c.translate(b.x,b.y);
         for(const clip of clips)if(time>=clip.start&&(time<clip.start+clip.duration||holds(clip.options.kind)))decoration(c,r,b.width,b.height,clip,progress(clip,time),s.alpha);
         c.restore();const masks=maskCoverage(r,parent,time,r.id+"-masks");multiply(composed,masks);
         const f=frame.getContext("2d");f.globalCompositeOperation="destination-out";f.drawImage(masks,0,0);f.globalCompositeOperation="lighter";f.drawImage(composed,0,0);f.globalCompositeOperation="source-over";
@@ -335,7 +399,7 @@
         paint.putImageData(pixels, 0, 0);
         sourceCoverage = coverage;
     }
-    function render(time,rest=false) {
+    function render(time,rest=false,holdOriginalPrice=false) {
         if (background && !timelineBeforeFocus && focusIndex === cleanFocus && focusProgress(performance.now()) >= 1 &&
             manualTime === null && manualElapsed === null) {
             ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -349,29 +413,32 @@
         }
         ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(image(data.source), 0, 0);
+        const clipsFor = r => effective(holdOriginalPrice
+            ? r.clips.filter(clip => clip.options.kind !== "DigitRoll")
+            : r.clips, time);
         const roots = data.regions.filter(r => !r.parentId);
         const visible = r => r.enabled && (!r.parentId || data.regions.find(p => p.id === r.parentId)?.enabled);
         const plain = roots.every(r => r.enabled) && data.regions.filter(visible).every(r => {
             if (r.masks.some(m => m.enabled)) return false;
-            const a = assets.get(r.id), clips = effective(r.clips, time), state = motion(clips, time, a, a.digits.length > 0);
+            const a = assets.get(r.id), clips = clipsFor(r), state = motion(clips, time, a, a.digits.length > 0);
             return identity(state) && !clips.some(c => time >= c.start && time < c.start+c.duration && ["DigitRoll", "Bounce"].includes(c.options.kind));
         });
-        if(plain)for(const r of data.regions.filter(visible).slice().reverse()){const a=assets.get(r.id);ctx.save();ctx.translate(a.x,a.y);for(const c of effective(r.clips,time))if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))decoration(ctx,r,a.width,a.height,c,progress(c,time),1);ctx.restore();}
+        if(plain)for(const r of data.regions.filter(visible).slice().reverse()){const a=assets.get(r.id);ctx.save();ctx.translate(a.x,a.y);for(const c of clipsFor(r))if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))decoration(ctx,r,a.width,a.height,c,progress(c,time),1);ctx.restore();}
         if (!plain) {
             const needsRaster = r => {
-                const a=assets.get(r.id), clips=effective(r.clips,time);
+                const a=assets.get(r.id), clips=clipsFor(r);
                 return r.masks.some(m=>m.enabled)||numericAt(a,clips,time)||!identity(motion(clips,time,a,a.digits.length>0))||
                     r.role==="Group"&&data.regions.some(child=>child.parentId===r.id&&child.enabled&&
-                        (needsRaster(child)||effective(child.clips,time).some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))));
+                        (needsRaster(child)||clipsFor(child).some(c=>time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))));
             };
             const rasterRoots=new Set(roots.filter(r=>!r.enabled||needsRaster(r)).map(r=>r.id));
             for (const r of roots) {
                 if (!rasterRoots.has(r.id) || r.overlayOnly || r.enabled && r.background === "KeepOriginal") continue;
-                const a = assets.get(r.id); replaceSource(ctx,a,a.x,a.y,r.enabled&&numericAt(a,effective(r.clips,time),time));
+                const a = assets.get(r.id); replaceSource(ctx,a,a.x,a.y,r.enabled&&numericAt(a,clipsFor(r),time));
             }
             for (const r of roots.slice().reverse()) {
                 if (!r.enabled) continue;
-                const a = assets.get(r.id), clips = effective(r.clips, time), s = motion(clips, time, a, a.digits.length > 0);
+                const a = assets.get(r.id), clips = clipsFor(r), s = motion(clips, time, a, a.digits.length > 0);
                 if (!rasterRoots.has(r.id)) {
                     ctx.save(); ctx.translate(a.x,a.y);
                     for (const c of clips) if(time>=c.start&&(time<c.start+c.duration||holds(c.options.kind)))
@@ -380,15 +447,13 @@
                     continue;
                 }
                 const frame = blank(r.id + "-frame", a.width, a.height), f = frame.getContext("2d"); f.drawImage(image(a.raw), 0, 0);
-                if (r.role === "Group") for (const child of data.regions.filter(c => c.parentId === r.id && c.enabled).slice().reverse()) applyArea(frame, child, a, time);
+                if (r.role === "Group") for (const child of data.regions.filter(c => c.parentId === r.id && c.enabled).slice().reverse()) applyArea(frame, child, a, time, clipsFor(child));
                 const number = blank(r.id + "-number", a.width, a.height);
                 const numeric=digits(number.getContext("2d"), r, a, clips, time);
                 if (numeric) { f.clearRect(0, 0, a.width, a.height); f.drawImage(number, 0, 0); }
-                const typewriterClip=clips.filter(c=>c.options.kind==="Typewriter"&&time>=c.start&&time<c.start+c.duration).at(-1);
-                if(typewriterClip&&!numeric){const source=copy(r.id+"-typewriter-source",frame);f.clearRect(0,0,a.width,a.height);typewriter(f,source,progress(typewriterClip,time));}
-                const specialClip=clips.filter(c=>revealEntrances.has(c.options.kind)&&time>=c.start&&time<c.start+c.duration).at(-1);
+                const specialClip=rasterMotion(clips,time);
                 multiply(frame, image(numeric?(a.numericShape??a.shape):a.shape)); const masks = maskCoverage(r, a, time, r.id + "-masks"); multiply(frame, masks);
-                ctx.save(); ctx.translate(a.x, a.y); transform(ctx, local(a), s);crop(ctx,local(a),s); ctx.globalAlpha = clamp(s.alpha);if(specialClip&&!numeric)drawEntrance(ctx,frame,specialClip.options.kind,progress(specialClip,time),power(specialClip));else ctx.drawImage(frame, 0, 0); ctx.globalAlpha = 1;
+                ctx.save(); ctx.translate(a.x, a.y); transform(ctx, local(a), s);crop(ctx,local(a),s); ctx.globalAlpha = clamp(s.alpha);if(specialClip&&!numeric)drawRasterMotion(ctx,frame,specialClip,time);else ctx.drawImage(frame, 0, 0); ctx.globalAlpha = 1;
                 if (r.masks.some(m => m.enabled)) {
                     const decor = blank(r.id + "-decor", a.width, a.height), d = decor.getContext("2d");
                     for (const c of clips) if (time >= c.start && (time < c.start + c.duration || holds(c.options.kind))) decoration(d, r, a.width, a.height, c, progress(c, time), s.alpha);
@@ -397,7 +462,22 @@
                 ctx.restore();
             }
         }
-        if (sourceCoverage) multiply(canvas, sourceCoverage);
+        if (sourceCoverage) {
+            // Keep the existing transparency guard outside authored animation areas.
+            // New motion and ornaments may intentionally extend past the original alpha.
+            const areas = data.regions.filter(r => visible(r) && clipsFor(r).some(c =>
+                (newEffects.has(c.options.kind) || c.allowTransparentMotion) && time >= c.start && (time < c.start + c.duration || holds(c.options.kind))));
+            if (areas.length === 0) multiply(canvas, sourceCoverage);
+            else {
+                const coverage = copy("motion-source-coverage", sourceCoverage), mask = coverage.getContext("2d");
+                mask.fillStyle = "white";
+                for (const r of areas) {
+                    const a = assets.get(r.id);
+                    mask.fillRect(a.x-a.width, a.y-a.height, a.width*3, a.height*3);
+                }
+                multiply(canvas, coverage);
+            }
+        }
         drawBlurFocus();
         if (plan.enabled && plan.exitFade && time >= B) {
             const alpha = plan.exitFrames <= 1 ? 0 : clamp((plan.endFrame - 1 - time * fps) / (plan.exitFrames - 1));
@@ -543,18 +623,14 @@
             try {
                 finishFocus(performance.now());
                 const s = displayedSample(), time = manualTime ?? s.time, frame = Math.floor(time * fps + 1e-7), rest=manualTime===null&&s.rest;
-                // A parked OBS preview must show the source price, not the first animated digit frame.
-                const showOriginal = (hasDigitRoll || timelineBeforeFocus) && awaitingActivation() && manualTime === null && manualElapsed === null;
+                // Keep the price readable while letting the rest of the scene wait on its entrance frame.
+                const parked = data.playback.replayOnShow && awaitingActivation() && manualTime === null && manualElapsed === null;
                 const movingFocus = focusStarted && programActive !== false && manualTime === null && manualElapsed === null &&
                     performance.now() <= focusChange + focus.seconds * 1000;
                 const settledFocus = !movingFocus && lastFrame === "focus-transition";
-                const key = showOriginal ? "obs-preview-original" : movingFocus ? "focus-transition" : frame + (rest ? ":rest" : "");
+                const key = parked ? "obs-preview" : movingFocus ? "focus-transition" : frame + (rest ? ":rest" : "");
                 if (movingFocus || settledFocus || key !== lastFrame) {
-                    if (showOriginal) {
-                        ctx.resetTransform(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(image(data.source), 0, 0);
-                    } else render(frame / fps, rest);
+                    render(parked ? 0 : frame / fps, !parked && rest, parked && hasDigitRoll);
                     lastFrame = key;
                 }
                 const label = document.getElementById("status"); if (label) label.textContent = `${s.phase} · ${time.toFixed(2)}초`;

@@ -133,14 +133,22 @@ public partial class MainWindow
             return true;
         }
         if(!_editor.ShortcutsEnabled||(modifiers!=ModifierKeys.None&&modifiers!=ModifierKeys.Shift)||_current is null)return false;
-        if(focus is TimelineControl && modifiers==ModifierKeys.None && key is Key.Left or Key.Right)
+        if(focus is TimelineControl && key is Key.Left or Key.Right)
         {
             var clips=TimelineEditor.SelectedClips.Select(item=>item.Clip).ToList();
-            if(clips.Count==0 || !CommitClip(true))return false;
-            var delta=(key==Key.Left?-1d:1d)/_video.Fps;
-            if(clips.Min(clip=>clip.Start)+delta < -1e-9 || clips.Max(clip=>clip.Start+clip.Duration)+delta > 3600+1e-9)return true;
-            foreach(var clip in clips)clip.Start=Math.Max(0,clip.Start+delta);
-            MarkEdited();RefreshTimeline();LoadClipFields();
+            if(modifiers==ModifierKeys.Shift&&clips.Count==0)return false;
+            var frames=modifiers==ModifierKeys.Shift?10:1;
+            var delta=(key==Key.Left?-1d:1d)*frames/_video.Fps;
+            if(clips.Count>0)
+            {
+                if(!CommitClip(true))return false;
+                if(clips.Min(clip=>clip.Start)+delta < -1e-9 || clips.Max(clip=>clip.Start+clip.Duration)+delta > 3600+1e-9)return true;
+                foreach(var clip in clips)clip.Start=Math.Max(0,clip.Start+delta);
+                MarkEdited();RefreshTimeline();LoadClipFields();
+            }
+            StopPlayback();
+            var time=TimelineRules.Snap(_time+delta,_video.Fps);
+            Seek(Math.Clamp(time,0,ResolvedVideo.ActualDuration),true);
             return true;
         }
         if(key.ToString()==_editor.DrawKey){SetDrawMode(true);return true;}

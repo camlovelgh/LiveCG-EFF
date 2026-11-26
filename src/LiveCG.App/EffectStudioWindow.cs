@@ -58,7 +58,7 @@ public sealed class EffectStudioWindow:Window
         Label(fields,"다음 키까지 움직임");foreach(var text in EditorTerms.Easing)_easing.Items.Add(text);fields.Children.Add(_easing);AddButton(fields,"키 추가 / 수정",AddKeyFromFields);
         Label(fields,"효과 조합 — 선택한 모션의 프레임을 편집합니다");fields.Children.Add(_clips);
         var native=new WrapPanel();fields.Children.Add(native);AddButton(native,"효과 추가",AddNative);AddButton(native,"효과 복제",DuplicateNative);AddButton(native,"효과 삭제",DeleteNative);
-        Label(fields,"효과 종류");foreach(var kind in Enum.GetValues<EffectKind>())_kind.Items.Add(ProductInfo.EffectName(kind));fields.Children.Add(_kind);
+        Label(fields,"효과 종류");_kind.ItemsSource=ProductInfo.SelectableEffects.Select(kind=>new { Kind=kind, Name=ProductInfo.EffectName(kind) }).ToList();_kind.DisplayMemberPath="Name";_kind.SelectedValuePath="Kind";fields.Children.Add(_kind);
         AddButton(fields,"효과 색상",()=>{var picker=new ColorPickerWindow(_selectedClip.Options.Color is { } color?SKColor.Parse(color):ProductInfo.DefaultEffectColor(_selectedClip.Options.Kind)){Owner=this};if(picker.ShowDialog()==true){_selectedClip.Options=_selectedClip.Options with{Color=ColorPickerWindow.Hex(picker.SelectedColor)};Record();RefreshAll();}});
         AddButton(fields,"기본 색상 복원",()=>{_selectedClip.Options=_selectedClip.Options with{Color=null};Record();RefreshAll();});
         var times=new System.Windows.Controls.Primitives.UniformGrid{Columns=2};fields.Children.Add(times);Label(times,"시작(초)");Label(times,"길이(초)");times.Children.Add(_start);times.Children.Add(_duration);
@@ -100,7 +100,7 @@ public sealed class EffectStudioWindow:Window
     private void RefreshAll()
     {
         _loading=true;_name.Text=Asset.Name;_category.Text=Asset.Category;_description.Text=Asset.Description;Timeline.Motion=Motion;_fps.Text=Motion.Fps.ToString();_length.Text=Motion.LengthFrames.ToString();_clips.ItemsSource=Asset.Clips.OrderBy(c=>c.Start).ToList();_clips.SelectedItem=_selectedClip;
-        _kind.SelectedIndex=(int)_selectedClip.Options.Kind;_start.Text=F(_selectedClip.Start);_duration.Text=F(_selectedClip.Duration);_strength.SelectedIndex=ProductInfo.StrengthIndex(_selectedClip.Options.Strength);_speed.Text=F(_selectedClip.Options.Speed);_loopClip.IsChecked=_selectedClip.Loop;_period.Text=F(_selectedClip.LoopPeriod);_property.SelectedIndex=(int)Timeline.SelectedProperty;
+        _kind.SelectedValue=_selectedClip.Options.Kind;_start.Text=F(_selectedClip.Start);_duration.Text=F(_selectedClip.Duration);_strength.SelectedIndex=ProductInfo.StrengthIndex(_selectedClip.Options.Strength);_speed.Text=F(_selectedClip.Options.Speed);_loopClip.IsChecked=_selectedClip.Loop;_period.Text=F(_selectedClip.LoopPeriod);_property.SelectedIndex=(int)Timeline.SelectedProperty;
         _scrub.Maximum=Math.Max(1,Math.Ceiling(Asset.Duration*Motion.Fps));_scrub.Value=Math.Clamp(_time*Motion.Fps,0,_scrub.Maximum);_loading=false;Timeline.Refresh();LoadKey();UpdatePreview();
     }
     private void LoadKey()
@@ -131,7 +131,7 @@ public sealed class EffectStudioWindow:Window
     {
         try
         {
-            var clip=_selectedClip.Copy(false);clip.Start=Number(_start.Text);clip.Duration=Number(_duration.Text);clip.Options=clip.Options with{Kind=(EffectKind)_kind.SelectedIndex,Strength=ProductInfo.StrengthAt(_strength.SelectedIndex),Speed=Number(_speed.Text)};clip.Loop=_loopClip.IsChecked==true;clip.LoopPeriod=Number(_period.Text);
+            var clip=_selectedClip.Copy(false);clip.Start=Number(_start.Text);clip.Duration=Number(_duration.Text);clip.Options=clip.Options with{Kind=_kind.SelectedValue is EffectKind kind?kind:clip.Options.Kind,Strength=ProductInfo.StrengthAt(_strength.SelectedIndex),Speed=Number(_speed.Text)};clip.Loop=_loopClip.IsChecked==true;clip.LoopPeriod=Number(_period.Text);
             if(clip.Options.Kind==EffectKind.UserMotion){clip.Motion??=new();clip.Motion.LengthFrames=Math.Max(1,(int)Math.Round(clip.Duration*clip.Motion.Fps));}else clip.Motion=null;
             clip.Validate();if(clip.End>300)throw new InvalidDataException("에셋 최대 길이는300초입니다.");var index=Asset.Clips.IndexOf(_selectedClip);Asset.Clips[index]=clip;_selectedClip=clip;EnsureMotion();if(clip.Motion is not null)_motionClip=clip;Record();RefreshAll();
         }catch(Exception ex){_info.Text=ex.Message;}

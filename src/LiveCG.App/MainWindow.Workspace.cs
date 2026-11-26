@@ -23,7 +23,7 @@ public partial class MainWindow
     public Window? DetachedEffectsWindow=>_effectsWindow;
     private void InitializeWorkspace()
     {
-        Preview.ColorPicked+=color=>{if(_pickingEffectColor){_pickingEffectColor=false;SetEffectColor(color);}else SetBackgroundColor(color);};AddFileMenu();RefreshAssets();
+        Preview.ColorPicked+=color=>{if(_pickingEffectColor){_pickingEffectColor=false;SetEffectColor(color);}else SetBackgroundColor(color);};AddFileMenu();LoadFavoriteSettings();RefreshAssets();
         Loaded+=(_,_)=>
         {
             if(Environment.GetEnvironmentVariable("LIVECG_DISABLE_WORKSPACE_RESTORE")=="1"){_workspaceReady=true;return;}
@@ -43,7 +43,8 @@ public partial class MainWindow
     }
     private void SetFocusMode(bool focus)
     {
-        if(!_focusMode&&EditorGrid.RowDefinitions[2].ActualHeight>0)_timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
+        if(!_focusMode&&_previewWindow is null&&EditorGrid.RowDefinitions[2].Height.IsAbsolute&&EditorGrid.RowDefinitions[2].ActualHeight>0)
+            _timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
         _focusMode=focus;TimelinePanel.Visibility=focus?Visibility.Collapsed:Visibility.Visible;TimelineSplitter.Visibility=focus||_previewWindow is not null?Visibility.Collapsed:Visibility.Visible;
         EditorGrid.RowDefinitions[2].MinHeight=focus?0:170;EditorGrid.RowDefinitions[2].Height=focus?new GridLength(0):new GridLength(_previewWindow is null?_timelineHeight:1,_previewWindow is null?GridUnitType.Pixel:GridUnitType.Star);
         EditorGrid.RowDefinitions[1].Height=new GridLength(focus?0:7);FocusModeButton.Content=focus?"편집 완료 / 타임라인":"편집 크게";
@@ -55,6 +56,12 @@ public partial class MainWindow
         host.Children.Remove(panel);var dock=new DockPanel();var back=new Button{Content="메인 화면으로 돌리기",HorizontalAlignment=HorizontalAlignment.Right};DockPanel.SetDock(back,Dock.Top);dock.Children.Add(back);dock.Children.Add(panel);
         var window=new Window{Title=title+" · "+ProductInfo.Credit,Content=dock,Width=title.StartsWith("효과")?850:1100,Height=820,MinWidth=480,MinHeight=420,ResizeMode=ResizeMode.NoResize,Owner=this,Background=Background,Foreground=Foreground,WindowStartupLocation=WindowStartupLocation.CenterOwner};
         back.Click+=(_,_)=>window.Close();window.PreviewKeyDown+=EditorKeyDown;
+        if(panel==PreviewPanel)
+        {
+            window.AllowDrop=true;
+            window.DragOver+=FilesDragOver;
+            window.Drop+=FilesDropped;
+        }
         WindowPlacement? beforeClose=null;window.Closing+=(_,_)=>beforeClose=WindowPlacement.Capture(window);
         window.Closed+=(_,_)=>{dock.Children.Remove(panel);host.Children.Add(panel);restored(beforeClose??WindowPlacement.Capture(window));};
         if(Environment.GetEnvironmentVariable("LIVECG_DISABLE_WORKSPACE_RESTORE")=="1"){window.WindowStartupLocation=WindowStartupLocation.Manual;window.Left=-16000;window.Top=-16000;window.ShowInTaskbar=false;window.ShowActivated=false;}
@@ -83,7 +90,8 @@ public partial class MainWindow
     private void SaveWorkspace()
     {
         if(!_workspaceReady)return;
-        if(!_focusMode&&_previewWindow is null&&EditorGrid.RowDefinitions[2].ActualHeight>0)_timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
+        if(!_focusMode&&_previewWindow is null&&EditorGrid.RowDefinitions[2].Height.IsAbsolute&&EditorGrid.RowDefinitions[2].ActualHeight>0)
+            _timelineHeight=Math.Clamp(EditorGrid.RowDefinitions[2].ActualHeight,170,700);
         _workspace.Main=WindowPlacement.Capture(this);_workspace.PreviewDetached=_previewWindow is not null;_workspace.EffectsDetached=_effectsWindow is not null;
         _workspace.RightWidth=_rightPanelWidth;_workspace.LayerPanelHeight=_layerPanelHeight;
         if(_previewWindow is not null)_workspace.Preview=WindowPlacement.Capture(_previewWindow);if(_effectsWindow is not null)_workspace.Effects=WindowPlacement.Capture(_effectsWindow);
@@ -145,31 +153,67 @@ public partial class MainWindow
     public void ApplyObjectSelection(NormalizedRect bounds,ObjectCutout? cutout,SKColor? background=null,double? tolerance=null,SeparationTarget? target=null,string? inkColor=null,TextSeparationSettings? textSettings=null)
     {if(_busy||_region is null)return;cutout?.Validate();if(textSettings is not null)_region.TextSettings=textSettings.Copy();if(target is { } selectedTarget)_region.SeparationTarget=selectedTarget;if(inkColor is not null)_region.TextInkColor=inkColor;if(_region.SeparationTarget==SeparationTarget.Text)_region.Softness=_region.Softness with{Enabled=false};var changedBounds=_region.Bounds!=bounds.Clamp();_region.Bounds=bounds.Clamp();_region.Cutout=cutout;_region.CutoutEnabled=true;_region.ContentOnly=cutout is not null;if(changedBounds)_region.Shape=RegionShape.Rectangle;if(background is { } color){_region.Background=color.Alpha==0?BackgroundMode.Transparent:BackgroundMode.Solid;_region.BackgroundColor=ColorPickerWindow.Hex(color);}if(tolerance is { } value)_region.ContentTolerance=value;var oldLoading=_loading;_loading=true;BackgroundBox.SelectedIndex=(int)_region.Background;BackgroundColorBox.Text=_region.BackgroundColor;_loading=oldLoading;SelectRegion(_region,_clip);MarkEdited();Preview.InvalidateVisual();Notify("정밀 보정 적용 · 자동 분리 중복 없음");}
     private EffectAsset? SelectedAsset=>AssetList.SelectedItem as EffectAsset;
-    private void RefreshAssets(){_assets=AssetStore.List(out var errors);FilterAssetSearch(this,new TextChangedEventArgs(TextBox.TextChangedEvent,UndoAction.None));ApplyEffectFilters();if(errors.Count>0)Notify("일부 에셋을 읽지 못했습니다: "+errors[0]);}
-    private void OpenAssetFolder(object sender,RoutedEventArgs e){try{Directory.CreateDirectory(AssetStore.DirectoryPath);Process.Start(new ProcessStartInfo{FileName=AssetStore.DirectoryPath,UseShellExecute=true});}catch(Exception ex){Error(ex);}}
-    private void ReloadAssets(object sender,RoutedEventArgs e){RefreshAssets();Notify("효과 폴더의 .lcgeffect.json 파일을 다시 읽었습니다.");}
-    private void FilterEffects(object sender,TextChangedEventArgs e)=>ApplyEffectFilters();
-    private void EffectCategoryChanged(object sender,SelectionChangedEventArgs e)=>ApplyEffectFilters();
-    private void ApplyEffectFilters()
+    private IReadOnlyList<EffectAsset> _bundledEffects=[];
+    private void RefreshAssets(bool announce=false)
     {
-        if(EffectSearchBox is null||EffectCategoryBox is null||EffectsGrid is null)return;
-        var query=EffectSearchBox.Text.Trim();var category=EffectCategoryBox.SelectedIndex;var visible=0;
-        foreach(var thumbnail in _thumbnails)
+        _assets=AssetStore.List(out var errors);
+        _bundledEffects=AssetStore.ListBundled(out var bundledErrors);
+        FilterAssetSearch(this,new TextChangedEventArgs(TextBox.TextChangedEvent,UndoAction.None));
+        BundledPresets.ItemsSource=_bundledEffects;
+        BundledPresetTitle.Visibility=_bundledEffects.Count>0?Visibility.Visible:Visibility.Collapsed;
+        RefreshFavorites();
+        errors.AddRange(bundledErrors);
+        if(errors.Count>0)Notify("일부 효과 파일을 건너뛰었습니다 · "+errors[0]);
+        else if(announce)Notify("효과 목록을 다시 불러왔습니다.");
+    }
+    private void OpenAssetFolder(object sender,RoutedEventArgs e){try{Directory.CreateDirectory(AssetStore.DirectoryPath);Process.Start(new ProcessStartInfo{FileName=AssetStore.DirectoryPath,UseShellExecute=true});}catch(Exception ex){Error(ex);}}
+    private void ReloadAssets(object sender,RoutedEventArgs e)=>RefreshAssets(true);
+    private void InsertBundledPreset(object sender,RoutedEventArgs e)
+    {if(sender is Button { Tag: EffectAsset asset })PlaceBundledPreset(asset,false);}
+    private void ReplaceBundledPreset(object sender,RoutedEventArgs e)
+    {if(sender is Button { Tag: EffectAsset asset })PlaceBundledPreset(asset,true);}
+    private void EditBundledPreset(object sender,RoutedEventArgs e)
+    {if(sender is Button { Tag: EffectAsset asset })OpenStudio(asset.Copy(true));}
+    private void PlaceBundledPreset(EffectAsset asset,bool replace)
+    {
+        if(_busy)return;
+        if(_region is null){Notify("프리셋을 적용할 영역을 선택하세요.");return;}
+        var region=_region;
+        var selected=_clip is { } activeClip && region.Clips.Contains(activeClip)?activeClip:null;
+        if(replace&&selected is null){Notify("교체할 타임라인 클립을 선택하세요.");return;}
+        if(!CommitClip(true))return;
+
+        try
         {
-            var kind=thumbnail.Kind;var matchesCategory=category switch
-            {
-                1=>ProductInfo.IsNewEffect(kind),
-                2=>ProductInfo.IsEntrance(kind),
-                3=>ProductInfo.NeedsLayer(kind)&&!ProductInfo.IsEntrance(kind),
-                4=>!ProductInfo.NeedsLayer(kind),
-                _=>true
-            };
-            var matchesName=ProductInfo.EffectName(kind).Contains(query,StringComparison.OrdinalIgnoreCase);
-            thumbnail.Visibility=matchesCategory&&matchesName?Visibility.Visible:Visibility.Collapsed;
-            if(thumbnail.Visibility==Visibility.Visible)visible++;
+            var selectedGroup=selected is null?[]:region.Clips.Where(clip=>selected.AssetInstanceId is { } id
+                ?clip.AssetInstanceId==id:clip.Id==selected.Id).ToList();
+            var previousEnd=selectedGroup.Count>0?selectedGroup.Max(clip=>clip.End):region.Clips.Select(clip=>clip.End).DefaultIfEmpty(0).Max();
+            var start=replace?selectedGroup.Min(clip=>clip.Start):previousEnd;
+            var added=AssetStore.Instantiate(asset,start,_video.Fps,bundled:true);
+            if(added.Count==0){Notify("이 프리셋에는 적용할 효과가 없습니다.");return;}
+            if(region.Clips.Count-(replace?selectedGroup.Count:0)+added.Count>4000)
+                throw new InvalidDataException("영역당 최대 4,000클립입니다.");
+
+            if(replace&&selected!.Section!=ClipSection.Auto)
+                foreach(var clip in added)clip.Section=selected.Section;
+
+            var following=region.Clips.Where(clip=>!selectedGroup.Contains(clip)&&clip.Start>=previousEnd-1e-7).ToList();
+            var shift=following.Count==0?0:Math.Max(0,added.Max(clip=>clip.End)-following.Min(clip=>clip.Start));
+            foreach(var clip in following)
+                if(shift>1e-7)(clip with{Start=clip.Start+shift}).Validate();
+
+            if(replace)region.Clips.RemoveAll(selectedGroup.Contains);
+            foreach(var clip in following)
+                if(shift>1e-7)clip.Start+=shift;
+            region.Clips.AddRange(added);
+            SelectRegion(region,added[0]);MarkEdited();RefreshRegionList();RefreshTimeline();
         }
-        EffectCountText.Text=$"{visible} / {_thumbnails.Count}개";
-        EffectFilterEmpty.Visibility=visible==0?Visibility.Visible:Visibility.Collapsed;
+        catch(Exception ex){Error(ex);}
+    }
+    private static string? EffectCompatibilityMessage(IEnumerable<EffectRegion> regions)
+    {
+        var removed=regions.SelectMany(region=>region.Clips).Where(clip=>ProductInfo.IsRetiredEffect(clip.Options.Kind)).ToList();
+        return removed.Count==0?null:$"삭제된 효과 {removed.Count}개는 재생을 건너뜁니다. 타임라인에서 다른 효과로 교체할 수 있습니다.";
     }
     private void FilterAssetSearch(object sender,TextChangedEventArgs e)
     {if(AssetList is null)return;var query=AssetSearchBox?.Text.Trim()??"";AssetList.ItemsSource=_assets.Where(a=>(a.Name+" "+a.Category).Contains(query,StringComparison.OrdinalIgnoreCase)).ToList();}
@@ -190,12 +234,16 @@ public partial class MainWindow
     private void EditAsset(object sender,RoutedEventArgs e){if(SelectedAsset is { } asset)OpenStudio(asset.Copy());}
     private void InsertAsset(object sender,RoutedEventArgs e)
     {
-        if(_busy||_region is null||SelectedAsset is not { } asset)return;
+        if(SelectedAsset is { } asset)InsertEffectAsset(asset);
+    }
+    private void InsertEffectAsset(EffectAsset asset)
+    {
+        if(_busy||_region is null)return;
         try
         {
             var travel=asset.Clips.Any(c=>c.Route is not null);if(travel&&_current!.Regions.Count>=100)throw new InvalidDataException("영역은 파일당 최대100개입니다.");
             var targetRegion=travel?new EffectRegion{Name=asset.Name,Bounds=_region.Bounds,OverlayOnly=true,Background=BackgroundMode.KeepOriginal}:_region;
-            var clips=AssetStore.Instantiate(asset,_time,_video.Fps);var rect=ObjectExtractor.PixelRect(targetRegion.Bounds,_current!.Width,_current.Height);
+            var clips=AssetStore.Instantiate(asset,_time,_video.Fps);if(clips.Count==0){Notify("이 에셋에는 삭제된 효과만 있습니다. 내 효과에서 편집해 다시 저장하세요.");return;}var rect=ObjectExtractor.PixelRect(targetRegion.Bounds,_current!.Width,_current.Height);
             foreach(var clip in clips.Where(c=>c.Route is not null))
             {
                 var route=clip.Route!;var oldDuration=route.Duration;
@@ -210,12 +258,12 @@ public partial class MainWindow
     private void UpdateAssetClip(object sender,RoutedEventArgs e)
     {
         if(_busy||_region is null||_clip is null||SelectedAsset is not { } asset)return;
-        try{var group=_region.Clips.Where(c=>_clip.AssetInstanceId is { } instance?c.AssetInstanceId==instance:c.Id==_clip.Id).ToList();var clips=AssetStore.Instantiate(asset,group.Min(c=>c.Start),_video.Fps);foreach(var c in group)_region.Clips.Remove(c);_region.Clips.AddRange(clips);SelectRegion(_region,clips[0]);MarkEdited();RefreshTimeline();}
+        try{var group=_region.Clips.Where(c=>_clip.AssetInstanceId is { } instance?c.AssetInstanceId==instance:c.Id==_clip.Id).ToList();var clips=AssetStore.Instantiate(asset,group.Min(c=>c.Start),_video.Fps);if(clips.Count==0){Notify("이 에셋에는 삭제된 효과만 있습니다.");return;}foreach(var c in group)_region.Clips.Remove(c);_region.Clips.AddRange(clips);SelectRegion(_region,clips[0]);MarkEdited();RefreshTimeline();}
         catch(Exception ex){Error(ex);}
     }
     private void DuplicateAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{var copy=asset.Copy(true);copy.Name+=" 복사";copy.IsNew=true;AssetStore.Save(copy);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void DeleteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;if(MessageBox.Show(this,"내 효과 ‘"+asset.Name+"’를 보관함에서 삭제할까요?","에셋 삭제",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;try{AssetStore.Remove(asset.Id);RefreshAssets();}catch(Exception ex){Error(ex);}}
-    private void FavoriteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;asset.Favorite=!asset.Favorite;AssetStore.Save(asset);RefreshAssets();}
+    private void FavoriteAsset(object sender,RoutedEventArgs e){if(SelectedAsset is { } asset)SetFavorite(new(asset.Name,Asset:asset),!asset.Favorite);}
     private void ImportAsset(object sender,RoutedEventArgs e){if(_busy)return;var dialog=new OpenFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json;*.json",Multiselect=true};if(dialog.ShowDialog(this)==true)try{foreach(var path in dialog.FileNames)AssetStore.Import(path);RefreshAssets();}catch(Exception ex){Error(ex);}}
     private void ExportAsset(object sender,RoutedEventArgs e){if(SelectedAsset is not { } asset)return;try{Directory.CreateDirectory(AssetStore.DirectoryPath);var dialog=new SaveFileDialog{Filter="LiveCG 효과 에셋|*.lcgeffect.json",InitialDirectory=AssetStore.DirectoryPath,FileName=string.Concat(asset.Name.Select(c=>Path.GetInvalidFileNameChars().Contains(c)?'_':c))};if(dialog.ShowDialog(this)==true){DocumentStore.Save(dialog.FileName,asset);RefreshAssets();}}catch(Exception ex){Error(ex);}}
 }

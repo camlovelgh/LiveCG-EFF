@@ -93,6 +93,7 @@ public static class DocumentStore
             case ProjectDocument d: d.Validate(); break;
             case TemplateDocument d: d.Validate(); break;
             case EffectAsset d: d.Validate(); break;
+            case EffectFavorites d: d.Validate(); break;
             default: throw new InvalidDataException("지원하지 않는 문서입니다.");
         }
     }

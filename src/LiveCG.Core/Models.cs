@@ -24,22 +24,25 @@ public static class ProductInfo
     public static string Credit => "SunjooAn | v" + Version;
     public static string EffectName(EffectKind kind) => kind switch
     {
-        EffectKind.TravelRoute=>"여행 경로",EffectKind.Sweep => "빛 스윕", EffectKind.Glow => "광채", EffectKind.Sparkle => "반짝임",
+        EffectKind.TravelRoute=>"여행 경로",EffectKind.Sweep => "빛 스윕", EffectKind.Glow => "광채", EffectKind.Sparkle => "반짝임 (삭제됨)",
         EffectKind.Border => "테두리 흐름", EffectKind.Zoom => "확대·축소", EffectKind.Bounce => "숫자 바운스",
         EffectKind.FadeIn => "서서히 등장", EffectKind.RiseIn => "아래에서 등장",
         EffectKind.ZoomIn => "줌인 등장", EffectKind.ZoomOutIn => "줌아웃 등장",
         EffectKind.Shake => "흔들림", EffectKind.Float => "부유",
-        EffectKind.Highlight => "형광펜", EffectKind.Ripple => "원형 파동",
-        EffectKind.Rays => "방사선", EffectKind.OrbitBurst => "원형 입자 확산", EffectKind.UserMotion => "사용자 모션", EffectKind.WipeRight=>"왼쪽부터 펼치기",EffectKind.WipeFromRight=>"오른쪽부터 펼치기",EffectKind.WipeFromTop=>"위에서 펼치기",EffectKind.WipeFromBottom=>"아래에서 펼치기",EffectKind.Typewriter=>"타자기처럼 순차 등장",EffectKind.Pollen=>"꽃가루 흩날리기",EffectKind.Steam=>"김 피어오르기",EffectKind.FallIn=>"위에서 등장",EffectKind.Underline=>"밑줄 형광펜",EffectKind.PopReturn=>"톡 커졌다 돌아오기",EffectKind.Squash=>"말랑하게 눌리기",EffectKind.Blink=>"깜빡이기",EffectKind.DrawCircle=>"동그라미 그리기",EffectKind.Wave=>"물결처럼 일렁이기",EffectKind.StrikeThrough=>"취소선 긋기",EffectKind.Halftone=>"점무늬 번쩍",EffectKind.ColorSplit=>"색 분리 글리치",EffectKind.PaperCorner=>"종이 귀퉁이 들리기",EffectKind.Fragments=>"조각이 모여 나타나기",EffectKind.TearIn=>"찢긴 화면처럼 나오기",EffectKind.CardFlip=>"3D 카드 뒤집기",EffectKind.InkSpread=>"잉크 번짐",EffectKind.FocusPull=>"초점 맞춤",EffectKind.EchoTrail=>"잔상 트레일",EffectKind.CenterCurtain=>"중앙 커튼 오픈",EffectKind.VenetianShutter=>"다중 셔터 오픈",EffectKind.IrisOpen=>"조리개 오픈",EffectKind.CharacterRotateRise=>"글자별 회전 상승",EffectKind.SplitConverge=>"양쪽에서 문구 합류",EffectKind.TileAssemble=>"블록 타일 조립", _ => "숫자 롤링"
+        EffectKind.Highlight => "형광펜 (삭제됨)", EffectKind.Ripple => "원형 파동",
+        EffectKind.Rays => "방사선", EffectKind.OrbitBurst => "원형 입자 확산", EffectKind.UserMotion => "사용자 모션", EffectKind.WipeRight=>"왼쪽부터 펼치기",EffectKind.WipeFromRight=>"오른쪽부터 펼치기",EffectKind.WipeFromTop=>"위에서 펼치기",EffectKind.WipeFromBottom=>"아래에서 펼치기",EffectKind.Typewriter=>"타자기처럼 순차 등장",EffectKind.Pollen=>"꽃가루 흩날리기",EffectKind.Steam=>"김 피어오르기",EffectKind.FallIn=>"위에서 등장",EffectKind.Underline=>"밑줄 형광펜 (삭제됨)",EffectKind.PopReturn=>"톡 커졌다 돌아오기",EffectKind.Squash=>"말랑하게 눌리기",EffectKind.Blink=>"깜빡이기",EffectKind.DrawCircle=>"동그라미 그리기",EffectKind.Wave=>"물결처럼 일렁이기",EffectKind.StrikeThrough=>"취소선 긋기",EffectKind.Halftone=>"점무늬 번쩍",EffectKind.ColorSplit=>"색 분리 글리치",EffectKind.PaperCorner=>"종이 귀퉁이 들리기",EffectKind.Fragments=>"조각이 모여 나타나기",EffectKind.TearIn=>"찢긴 화면처럼 나오기",EffectKind.CardFlip=>"3D 카드 뒤집기",EffectKind.InkSpread=>"잉크 번짐",EffectKind.FocusPull=>"초점 맞춤",EffectKind.EchoTrail=>"잔상 트레일",EffectKind.CenterCurtain=>"중앙 커튼 오픈",EffectKind.VenetianShutter=>"다중 셔터 오픈",EffectKind.IrisOpen=>"조리개 오픈",EffectKind.CharacterRotateRise=>"글자별 회전 상승",EffectKind.SplitConverge=>"양쪽에서 문구 합류",EffectKind.TileAssemble=>"블록 타일 조립", _ => "숫자 롤링"
     };
+    // Retain serialized names and numeric values for projects saved by older releases.
+    public static bool IsRetiredEffect(EffectKind kind)=>kind is EffectKind.Sparkle or EffectKind.Highlight or EffectKind.Underline;
+    public static IEnumerable<EffectKind> SelectableEffects=>Enum.GetValues<EffectKind>().Where(kind=>!IsRetiredEffect(kind));
     public static bool IsNewEffect(EffectKind kind)=>kind is EffectKind.PopReturn or EffectKind.Squash or EffectKind.Blink or EffectKind.DrawCircle or EffectKind.Wave or EffectKind.StrikeThrough or EffectKind.Halftone or EffectKind.ColorSplit or EffectKind.PaperCorner or EffectKind.Fragments or EffectKind.TearIn or EffectKind.WipeFromRight or EffectKind.WipeFromTop or EffectKind.WipeFromBottom or EffectKind.Typewriter or EffectKind.Pollen or EffectKind.Steam or EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble;
     public static readonly StrengthLevel[] Strengths=[StrengthLevel.VeryWeak,StrengthLevel.Weak,StrengthLevel.Medium,StrengthLevel.Strong,StrengthLevel.VeryStrong];
     public static int StrengthIndex(StrengthLevel level)=>Array.IndexOf(Strengths,level);
     public static StrengthLevel StrengthAt(int index)=>Strengths[Math.Clamp(index,0,Strengths.Length-1)];
     public static string StrengthName(StrengthLevel level) => level switch { StrengthLevel.VeryWeak=>"최약",StrengthLevel.Weak => "약", StrengthLevel.Medium => "중", StrengthLevel.VeryStrong=>"최강", _ => "강" };
     public static bool IsEntrance(EffectKind kind) => kind is EffectKind.FadeIn or EffectKind.RiseIn or EffectKind.ZoomIn or EffectKind.ZoomOutIn or EffectKind.WipeRight or EffectKind.WipeFromRight or EffectKind.WipeFromTop or EffectKind.WipeFromBottom or EffectKind.Typewriter or EffectKind.FallIn or EffectKind.Fragments or EffectKind.TearIn or EffectKind.CardFlip or EffectKind.InkSpread or EffectKind.FocusPull or EffectKind.EchoTrail or EffectKind.CenterCurtain or EffectKind.VenetianShutter or EffectKind.IrisOpen or EffectKind.CharacterRotateRise or EffectKind.SplitConverge or EffectKind.TileAssemble;
-    public static bool HoldsDecoration(EffectKind kind)=>kind is EffectKind.Highlight or EffectKind.Underline or EffectKind.TravelRoute or EffectKind.StrikeThrough or EffectKind.PaperCorner;
-    public static SKColor DefaultEffectColor(EffectKind kind)=>kind switch{EffectKind.Glow=>new(255,218,88),EffectKind.Sparkle=>new(255,247,192),EffectKind.Border=>new(255,211,67),EffectKind.Highlight or EffectKind.Underline=>new(255,225,32),EffectKind.Ripple=>new(255,225,120),EffectKind.Rays=>new(255,229,99),EffectKind.OrbitBurst=>new(255,230,78),EffectKind.DrawCircle=>new(255,88,98),_=>SKColors.White};
+    public static bool HoldsDecoration(EffectKind kind)=>kind is EffectKind.TravelRoute or EffectKind.StrikeThrough or EffectKind.PaperCorner;
+    public static SKColor DefaultEffectColor(EffectKind kind)=>kind switch{EffectKind.Glow=>new(255,218,88),EffectKind.Border=>new(255,211,67),EffectKind.Ripple=>new(255,225,120),EffectKind.Rays=>new(255,229,99),EffectKind.OrbitBurst=>new(255,230,78),EffectKind.DrawCircle=>new(255,88,98),_=>SKColors.White};
     public static bool NeedsLayer(EffectKind kind) => IsEntrance(kind) || kind is EffectKind.Zoom or EffectKind.Bounce or EffectKind.Shake or EffectKind.Float or EffectKind.DigitRoll or EffectKind.UserMotion or EffectKind.PopReturn or EffectKind.Squash or EffectKind.Blink or EffectKind.Wave;
 }
 
@@ -97,6 +100,8 @@ public record EffectClip
     public Guid? AssetId { get; set; }
     public Guid? AssetInstanceId { get; set; }
     public string? AssetName { get; set; }
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowTransparentMotion { get; set; }
     public virtual bool Equals(EffectClip? other) => other is not null && Id == other.Id;
     public override int GetHashCode() => Id.GetHashCode();
     [JsonIgnore] public double End => Start + Duration;
@@ -119,9 +124,10 @@ public record EffectClip
 
 public record VideoOptions
 {
+    public const int DefaultFps = 30;
     public OutputKind Output { get; set; }=OutputKind.Browser;
     public double Duration { get; set; } = 1;
-    public int Fps { get; set; } = 30;
+    public int Fps { get; set; } = DefaultFps;
     public int Crf { get; set; } = 18;
     public double EndHold { get; set; } = 1;
     [JsonIgnore] public int FrameCount => Math.Max(1, (int)Math.Ceiling(Duration * Fps - .00000001));

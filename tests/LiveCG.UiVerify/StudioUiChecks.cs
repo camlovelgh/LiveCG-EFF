@@ -74,7 +74,7 @@ internal static class StudioUiChecks
             }
             var asset=EffectAsset.NewMotion();asset.Name="테스트 사용자 모션";asset.Category="방송";asset.ThumbnailPng=EffectSample.Thumbnail(asset);AssetStore.Save(asset);Call("RefreshAssets");
             C<TextBox>("AssetSearchBox").Text="테스트 사용자";Pump();check(C<ListBox>("AssetList").Items.Cast<EffectAsset>().Any(a=>a.Id==asset.Id)&&C<ListBox>("AssetList").Items.Cast<EffectAsset>().All(a=>a.Name.Contains("테스트 사용자"))&&C<System.Windows.Controls.Primitives.UniformGrid>("EffectsGrid").Children.Cast<FrameworkElement>().All(t=>t.Visibility==Visibility.Visible),"asset search filters user names independently of built-in effects");
-            C<TextBox>("EffectSearchBox").Text="광채";Pump();check(C<System.Windows.Controls.Primitives.UniformGrid>("EffectsGrid").Children.Cast<FrameworkElement>().Count(t=>t.Visibility==Visibility.Visible)==1,"built-in effect search filters thumbnails");C<TextBox>("EffectSearchBox").Text="";C<TextBox>("AssetSearchBox").Text="";
+            C<TextBox>("AssetSearchBox").Text="";
             C<ListBox>("AssetList").SelectedItem=C<ListBox>("AssetList").Items.Cast<EffectAsset>().First(a=>a.Id==asset.Id);var beforeCount=Region().Clips.Count;Call("Seek",0d,false);Call("InsertAsset",window,new RoutedEventArgs());
             check(Region().Clips.Count==beforeCount+1&&Region().Clips.Any(c=>c.AssetId==asset.Id&&c.Motion is not null),"user-authored asset inserts as an actual keyframe clip");
             var firstInstance=Field<EffectClip>(window,"_clip").AssetInstanceId;Call("Seek",3d,false);Call("InsertAsset",window,new RoutedEventArgs());
